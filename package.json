@@ -1,6 +1,6 @@
 {
   "name": "sofizpay-sdk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "A comprehensive JavaScript SDK for Stellar blockchain DZT token transactions and payments",
   "main": "dist/sofizpay-sdk.cjs.js",

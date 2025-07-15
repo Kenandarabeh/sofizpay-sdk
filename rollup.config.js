@@ -7,7 +7,7 @@ export default {
     {
       file: 'dist/sofizpay-sdk.cjs.js',
       format: 'cjs',
-      exports: 'default'
+      exports: 'auto'
     },
     {
       file: 'dist/sofizpay-sdk.esm.js',
@@ -17,7 +17,7 @@ export default {
       file: 'dist/sofizpay-sdk.umd.js',
       format: 'umd',
       name: 'SofizPaySDK',
-      exports: 'default',
+      exports: 'auto',
       globals: {
         'stellar-sdk': 'StellarSdk',
         'axios': 'axios'

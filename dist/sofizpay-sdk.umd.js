@@ -1,8 +1,8 @@
 (function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('stellar-sdk'), require('axios')) :
-  typeof define === 'function' && define.amd ? define(['stellar-sdk', 'axios'], factory) :
-  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.SofizPaySDK = factory(global.StellarSdk, global.axios));
-})(this, (function (StellarSdk, axios) { 'use strict';
+  typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('stellar-sdk'), require('axios')) :
+  typeof define === 'function' && define.amd ? define(['exports', 'stellar-sdk', 'axios'], factory) :
+  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.SofizPaySDK = {}, global.StellarSdk, global.axios));
+})(this, (function (exports, StellarSdk, axios) { 'use strict';
 
   function _interopNamespaceDefault(e) {
     var n = Object.create(null);
@@ -806,6 +806,9 @@
     }
   }
 
-  return SofizPaySDK;
+  exports.SofizPaySDK = SofizPaySDK;
+  exports.default = SofizPaySDK;
+
+  Object.defineProperty(exports, '__esModule', { value: true });
 
 }));
