@@ -42,11 +42,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/sofizpay-sdk.git"
+    "url": "https://github.com/kenandarabeh/sofizpay-sdk.git"
   },
-  "homepage": "https://github.com/your-username/sofizpay-sdk#readme",
+  "homepage": "https://github.com/kenandarabeh/sofizpay-sdk#readme",
   "bugs": {
-    "url": "https://github.com/your-username/sofizpay-sdk/issues"
+    "url": "https://github.com/kenandarabeh/sofizpay-sdk/issues"
   },
   "engines": {
     "node": ">=16.0.0"
