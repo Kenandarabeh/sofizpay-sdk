@@ -13,4 +13,5 @@ test.*
 .npmignore
 .yarn-integrity
 test.*
+*.gitignore
 
