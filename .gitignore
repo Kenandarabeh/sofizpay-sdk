@@ -5,3 +5,12 @@ node_modules/
 coverage/
 .nyc_output/
 test.*
+.gitignore
+*.tgz
+*.swp
+./package-lock.json
+*.swo
+.npmignore
+.yarn-integrity
+test.*
+
