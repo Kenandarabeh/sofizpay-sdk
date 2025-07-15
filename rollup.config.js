@@ -17,7 +17,7 @@ export default {
       file: 'dist/sofizpay-sdk.umd.js',
       format: 'umd',
       name: 'SofizPaySDK',
-      exports: 'auto',
+      exports: 'default',
       globals: {
         'stellar-sdk': 'StellarSdk',
         'axios': 'axios'
