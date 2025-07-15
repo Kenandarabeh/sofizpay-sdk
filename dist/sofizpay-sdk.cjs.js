@@ -1,7 +1,5 @@
 'use strict';
 
-Object.defineProperty(exports, '__esModule', { value: true });
-
 var StellarSdk = require('stellar-sdk');
 var axios = require('axios');
 
@@ -807,5 +805,4 @@ class SofizPaySDK {
   }
 }
 
-exports.SofizPaySDK = SofizPaySDK;
-exports.default = SofizPaySDK;
+module.exports = SofizPaySDK;

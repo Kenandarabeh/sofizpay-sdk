@@ -413,4 +413,3 @@ class SofizPaySDK {
 }
 
 export default SofizPaySDK;
-export { SofizPaySDK };
