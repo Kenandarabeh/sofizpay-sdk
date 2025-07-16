@@ -225,4 +225,4 @@ MIT © [SofizPay Team](https://github.com/kenandarabeh)
 
 ---
 
-**Built with ❤️ for the Stellar ecosystem | Version `1.0.3`**
+**Built with ❤️ for the Stellar ecosystem | Version `1.0.6`**
