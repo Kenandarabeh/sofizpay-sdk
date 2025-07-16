@@ -84,7 +84,7 @@ class SofizPaySDK {
         transactions: formattedTransactions,
         total: formattedTransactions.length,
         publicKey: publicKey,
-        message: `تم جلب جميع المعاملات (${formattedTransactions.length} معاملة)`,
+        message: `Fetched all transactions (${formattedTransactions.length} transactions)`,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
@@ -299,7 +299,7 @@ class SofizPaySDK {
           totalFound: 0,
           searchMemo: memo,
           publicKey: publicKey,
-          message: `لا توجد معاملات في هذا الحساب`,
+          message: `There are no transactions in this account`,
           timestamp: new Date().toISOString()
         };
       }
@@ -347,7 +347,7 @@ class SofizPaySDK {
         totalFound: filteredTransactions.length,
         searchMemo: memo,
         publicKey: publicKey,
-        message: `تم العثور على ${filteredTransactions.length} معاملة تحتوي على "${memo}"`,
+        message: `Found ${filteredTransactions.length} transactions containing "${memo}"`,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
