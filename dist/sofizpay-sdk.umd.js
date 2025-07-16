@@ -448,13 +448,13 @@
       }
     }
 
-    async getTransactions(secretkey,limit = 50) {
-      if (!secretkey) {
-        throw new Error('Secret key is required.');
+    async getTransactions(publicKey,limit = 50) {
+      if (!publicKey) {
+        throw new Error('public Key is required.');
       }
 
       try {
-        const publicKey = getPublicKeyFromSecret(secretkey);
+
         const dztTransactions = await getDZTTransactions(publicKey,limit);
         
         const formattedTransactions = dztTransactions.map(tx => ({
@@ -478,7 +478,7 @@
           transactions: formattedTransactions,
           total: formattedTransactions.length,
           publicKey: publicKey,
-          message: `Fetched all transactions (${formattedTransactions.length} transactions)`,
+          message: `تم جلب جميع المعاملات (${formattedTransactions.length} معاملة)`,
           timestamp: new Date().toISOString()
         };
       } catch (error) {
@@ -492,13 +492,12 @@
       }
     }
 
-    async getDZTBalance(secretkey) {
-      if (!secretkey) {
-        throw new Error('Secret key is required.');
+    async getDZTBalance(publicKey) {
+      if (!publicKey) {
+        throw new Error('Public key is required.');
       }
 
       try {
-        const publicKey = getPublicKeyFromSecret(secretkey);
         
         const balance = await getDZTBalance(publicKey);
         
@@ -546,16 +545,15 @@
       }
     }
 
-    async startTransactionStream(secretkey, onNewTransaction) {
-      if (!secretkey) {
-        throw new Error('Secret key is required.');
+    async startTransactionStream(publicKey, onNewTransaction) {
+      if (!publicKey) {
+        throw new Error('public Key is required.');
       }
       if (!onNewTransaction || typeof onNewTransaction !== 'function') {
         throw new Error('Callback function is required.');
       }
 
       try {
-        const publicKey = getPublicKeyFromSecret(secretkey);
         
         if (this.activeStreams.has(publicKey)) {
           return {
@@ -589,7 +587,7 @@
         setupTransactionStream(publicKey, transactionHandler);
         
         this.activeStreams.set(publicKey, {
-          secretkey: secretkey,
+          publicKey: publicKey,
           startTime: new Date().toISOString(),
           isActive: true
         });
@@ -612,13 +610,12 @@
       }
     }
 
-    async stopTransactionStream(secretkey) {
-      if (!secretkey) {
-        throw new Error('Secret key is required.');
+    async stopTransactionStream(publicKey) {
+      if (!publicKey) {
+        throw new Error('public Key is required.');
       }
 
       try {
-        const publicKey = getPublicKeyFromSecret(secretkey);
         
         if (!this.activeStreams.has(publicKey)) {
           return {
@@ -647,13 +644,12 @@
       }
     }
 
-    async getStreamStatus(secretkey) {
-      if (!secretkey) {
-        throw new Error('Secret key is required.');
+    async getStreamStatus(publicKey) {
+      if (!publicKey) {
+        throw new Error('public Key is required.');
       }
 
       try {
-        const publicKey = getPublicKeyFromSecret(secretkey);
         const streamInfo = this.activeStreams.get(publicKey);
         
         return {
@@ -677,16 +673,15 @@
       return this.version;
     }
 
-    async searchTransactionsByMemo(secretkey, memo, limit = 50) {
-      if (!secretkey) {
-        throw new Error('Secret key is required.');
+    async searchTransactionsByMemo(publicKey, memo, limit = 50) {
+      if (!publicKey) {
+        throw new Error('public Key is required.');
       }
       if (!memo) {
         throw new Error('Memo is required for search.');
       }
 
       try {
-        const publicKey = getPublicKeyFromSecret(secretkey);
         
         const dztTransactions = await getDZTTransactions(publicKey, 200);
         
@@ -698,7 +693,7 @@
             totalFound: 0,
             searchMemo: memo,
             publicKey: publicKey,
-            message: `No transactions found in this account`,
+            message: `لا توجد معاملات في هذا الحساب`,
             timestamp: new Date().toISOString()
           };
         }
@@ -746,7 +741,7 @@
           totalFound: filteredTransactions.length,
           searchMemo: memo,
           publicKey: publicKey,
-          message: `Found ${filteredTransactions.length} transactions containing "${memo}"`,
+          message: `تم العثور على ${filteredTransactions.length} معاملة تحتوي على "${memo}"`,
           timestamp: new Date().toISOString()
         };
       } catch (error) {

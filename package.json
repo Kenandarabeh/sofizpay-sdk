@@ -1,24 +1,14 @@
 {
   "name": "sofizpay-sdk",
-  "version": "1.0.5",
+  "version": "1.0.0",
   "type": "module",
-  "description": "A comprehensive JavaScript SDK for Stellar blockchain DZT token transactions and payments",
+  "description": "SofizPay SDK - A simple payment processing library",
   "main": "dist/sofizpay-sdk.cjs.js",
   "module": "dist/sofizpay-sdk.esm.js",
   "browser": "dist/sofizpay-sdk.umd.js",
   "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/sofizpay-sdk.esm.js",
-      "require": "./dist/sofizpay-sdk.cjs.js",
-      "browser": "./dist/sofizpay-sdk.umd.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
   "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
+    "dist"
   ],
   "scripts": {
     "build": "rollup -c",
@@ -29,36 +19,13 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
-    "stellar",
-    "blockchain",
     "payment",
-    "dzt",
-    "cryptocurrency",
-    "transaction",
     "sdk",
     "sofizpay",
-    "finance",
-    "web3",
-    "javascript",
-    "typescript",
-    "nodejs",
-    "browser",
-    "react",
-    "vue"
+    "finance"
   ],
-  "author": "SofizPay Team",
+  "author": "",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/kenandarabeh/sofizpay-sdk.git"
-  },
-  "homepage": "https://github.com/kenandarabeh/sofizpay-sdk#readme",
-  "bugs": {
-    "url": "https://github.com/kenandarabeh/sofizpay-sdk/issues"
-  },
-  "engines": {
-    "node": ">=16.0.0"
-  },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^16.0.1",
     "rollup": "^4.45.0"
@@ -66,9 +33,5 @@
   "dependencies": {
     "axios": "^1.10.0",
     "stellar-sdk": "^12.3.0"
-  },
-  "peerDependencies": {
-    "stellar-sdk": "^12.0.0",
-    "axios": "^1.0.0"
   }
 }

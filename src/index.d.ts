@@ -16,6 +16,7 @@ export interface TransactionResult {
   destinationPublicKey: string;
   duration: number;
   timestamp: string;
+  error?: string;
 }
 
 export interface Transaction {
@@ -43,6 +44,7 @@ export interface TransactionsResult {
   publicKey: string;
   message?: string;
   timestamp: string;
+  error?: string;
 }
 
 export interface BalanceResult {
@@ -52,6 +54,7 @@ export interface BalanceResult {
   asset_code: string;
   asset_issuer: string;
   timestamp: string;
+  error?: string;
 }
 
 export interface PublicKeyResult {
@@ -75,7 +78,7 @@ export interface StreamStatus {
   isActive: boolean;
   publicKey: string;
   streamInfo: {
-    secretkey: string;
+    publicKey: string;
     startTime: string;
     isActive: boolean;
   } | null;
@@ -118,21 +121,21 @@ export default class SofizPaySDK {
   
   submit(data: SubmitData): Promise<TransactionResult>;
   
-  getTransactions(secretkey: string): Promise<TransactionsResult>;
+  getTransactions(publicKey: string): Promise<TransactionsResult>;
   
-  searchTransactionsByMemo(secretkey: string, memo: string, limit?: number): Promise<TransactionsResult>;
+  searchTransactionsByMemo(publicKey: string, memo: string, limit?: number): Promise<TransactionsResult>;
   
   getTransactionByHash(transactionHash: string): Promise<TransactionSearchResult>;
   
-  getDZTBalance(secretkey: string): Promise<BalanceResult>;
+  getDZTBalance(publicKey: string): Promise<BalanceResult>;
   
   getPublicKey(secretkey: string): Promise<PublicKeyResult>;
   
-  startTransactionStream(secretkey: string, onNewTransaction: (transaction: Transaction) => void): Promise<StreamResult>;
+  startTransactionStream(publicKey: string, onNewTransaction: (transaction: Transaction) => void): Promise<StreamResult>;
   
-  stopTransactionStream(secretkey: string): Promise<StreamResult>;
+  stopTransactionStream(publicKey: string): Promise<StreamResult>;
   
-  getStreamStatus(secretkey: string): Promise<StreamStatus>;
+  getStreamStatus(publicKey: string): Promise<StreamStatus>;
   
   getVersion(): string;
 }

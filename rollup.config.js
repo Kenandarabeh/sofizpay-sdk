@@ -7,7 +7,7 @@ export default {
     {
       file: 'dist/sofizpay-sdk.cjs.js',
       format: 'cjs',
-      exports: 'auto'
+      exports: 'default'
     },
     {
       file: 'dist/sofizpay-sdk.esm.js',
