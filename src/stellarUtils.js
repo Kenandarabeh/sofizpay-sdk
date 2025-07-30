@@ -21,7 +21,9 @@ const fetchWithRetry = async (url, retries = 3, delay = 1000) => {
   }
 };
 
-export const setupTransactionStream = (publicKey, addTransaction) => {
+export const setupTransactionStream = (publicKey, addTransaction, fromNow = true, checkInterval = 30) => {
+  let streamCloseFunction = null;
+  
   const txHandler = async (txResponse) => {
     try {
       const transactionData = await fetchWithRetry(`https://horizon.stellar.org/transactions/${txResponse.id}`);
@@ -30,7 +32,9 @@ export const setupTransactionStream = (publicKey, addTransaction) => {
       const operationsData = await fetchWithRetry(`https://horizon.stellar.org/transactions/${transactionData.id}/operations`);
       
       const operations = operationsData._embedded.records.filter(operation => {
-        return operation.asset_code && operation.amount;
+        return operation.asset_code === 'DZT' && 
+               operation.asset_issuer === 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV' &&
+               operation.amount;
       });
       
       await Promise.all(operations.map(async (operation) => {
@@ -38,7 +42,7 @@ export const setupTransactionStream = (publicKey, addTransaction) => {
           id: transactionData.hash,
           memo: memo || '',
           amount: operation.amount || '',
-          status: 'pending',
+          status: 'completed',
           source_account: operation.source_account || '',
           destination: operation.to || operation.destination || '',
           asset_code: operation.asset_code || '',
@@ -54,33 +58,59 @@ export const setupTransactionStream = (publicKey, addTransaction) => {
     }
   };
 
-  server.transactions()
-    .forAccount(publicKey)
-    .cursor('now')
-    .stream({
-      onmessage: txHandler,
-      onerror: async (error) => {
-        console.error('Error in transaction stream:', error);
-        if (error.status === 429) {
-          console.warn('Too many requests, retrying in 1 minute...');
-          await sleep(60000);
-          setupTransactionStream(publicKey, addTransaction);
+  const startStream = () => {
+    try {
+      
+      const streamBuilder = server.transactions()
+        .forAccount(publicKey)
+        .cursor('now'); 
+      
+      const eventSource = streamBuilder.stream({
+        onmessage: txHandler,
+        onerror: async (error) => {
+          console.error('Error in transaction stream:', error);
+          
+          if (error.status === 429) {
+            console.warn(`Too many requests, retrying in ${checkInterval} seconds...`);
+            await sleep(checkInterval * 1000);
+            startStream();
+          } else if (error.type === 'close' || error.type === 'error') {
+            console.warn(`Stream closed/error, retrying in ${checkInterval} seconds...`);
+            await sleep(checkInterval * 1000);
+            startStream(); 
+          }
+        },
+        reconnectTimeout: checkInterval * 1000
+      });
+      
+     
+      streamCloseFunction = () => {
+        if (eventSource && typeof eventSource.close === 'function') {
+          eventSource.close();
         }
-      }
-    });
+      };
+      
+    } catch (error) {
+      console.error('Error starting transaction stream:', error);
+      setTimeout(() => {
+        startStream();
+      }, checkInterval * 1000);
+    }
+  };
+
+  startStream();
+  
+  return streamCloseFunction;
 };
-export const sendPayment = async (sourceKey, destinationPublicKey, amount, assetCode = 'DZT', assetIssuer = 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV', memo = null) => {
-  console.log('Starting transaction...');
+export const sendPayment = async (sourceKey, destinationPublicKey, amount, memo = null) => {
   const startTime = Date.now();
 
   try {
     const sourceKeys = StellarSdk.Keypair.fromSecret(sourceKey);
     const sourcePublicKey = sourceKeys.publicKey();
-    console.log('Source public key:', sourcePublicKey);
 
-    const customAsset = new StellarSdk.Asset(assetCode, assetIssuer);
+    const customAsset = new StellarSdk.Asset('DZT', 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV');
     const account = await server.loadAccount(sourcePublicKey);
-    console.log('Account loaded, sequence:', account.sequenceNumber());
 
     let transactionBuilder = new StellarSdk.TransactionBuilder(account, {
       fee: StellarSdk.BASE_FEE,
@@ -98,24 +128,18 @@ export const sendPayment = async (sourceKey, destinationPublicKey, amount, asset
         console.warn(`Memo too long (${memo.length} chars), truncated to: ${truncatedMemo}`);
         memo = truncatedMemo;
       }
-      console.log('Adding memo:', memo);
       transactionBuilder = transactionBuilder.addMemo(StellarSdk.Memo.text(memo));
     }
 
     transactionBuilder = transactionBuilder.setTimeout(60);
     const transaction = transactionBuilder.build();
-    console.log('Transaction built, signing...');
     
     transaction.sign(sourceKeys);
-    console.log('Transaction signed');
 
-    console.log('Submitting transaction...');
     const result = await server.submitTransaction(transaction);
-    console.log('Transaction successful:', result.hash);
 
     const endTime = Date.now();
     const durationInSeconds = (endTime - startTime) / 1000;
-    console.log(`Transaction completed in ${durationInSeconds} seconds`);
 
     return {
       success: true,
@@ -173,7 +197,6 @@ export const sendPayment = async (sourceKey, destinationPublicKey, amount, asset
 
     const endTime = Date.now();
     const durationInSeconds = (endTime - startTime) / 1000;
-    console.log(`Transaction failed in ${durationInSeconds} seconds`);
 
     return {
       success: false,
@@ -184,17 +207,17 @@ export const sendPayment = async (sourceKey, destinationPublicKey, amount, asset
   }
 };
 
-export const getDZTBalance = async (publicKey) => {
+export const getBalance = async (publicKey) => {
   try {
     const account = await server.loadAccount(publicKey);
-    const dztAsset = account.balances.find(balance => 
+    const asset = account.balances.find(balance => 
       balance.asset_code === 'DZT' && 
       balance.asset_issuer === 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV'
     );
     
-    return dztAsset ? parseFloat(dztAsset.balance) : 0;
+    return asset ? parseFloat(asset.balance) : 0;
   } catch (error) {
-    console.error('Error fetching DZT balance:', error);
+    console.error('Error fetching balance:', error);
     throw error;
   }
 };
@@ -208,14 +231,14 @@ export const getPublicKeyFromSecret = (secretKey) => {
   }
 };
 
-export const getDZTTransactions = async (publicKey, limit = 200) => {
+export const getTransactions = async (publicKey, limit = 200) => {
   try {
     const transactions = await server.transactions()
       .forAccount(publicKey)
       .order('desc')
       .limit(limit)
       .call();
-    const dztTransactions = [];
+    const filteredTransactions = [];
     
     for (const tx of transactions.records) {
       try {
@@ -227,7 +250,7 @@ export const getDZTTransactions = async (publicKey, limit = 200) => {
               op.asset_code === 'DZT' && 
               op.asset_issuer === 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV') {
             
-            dztTransactions.push({
+            filteredTransactions.push({
               id: tx.id,
               hash: tx.hash,
               created_at: tx.created_at,
@@ -246,9 +269,9 @@ export const getDZTTransactions = async (publicKey, limit = 200) => {
       }
     }
     
-    return dztTransactions;
+    return filteredTransactions;
   } catch (error) {
-    console.error('Error fetching DZT transactions:', error);
+    console.error('Error fetching transactions:', error);
     throw error;
   }
 };
@@ -258,7 +281,6 @@ export const getTransactionByHash = async (transactionHash) => {
   }
 
   try {
-    console.log('Searching for transaction:', transactionHash);
     
     const transactionData = await server.transactions()
       .transaction(transactionHash)
@@ -276,7 +298,6 @@ export const getTransactionByHash = async (transactionHash) => {
     const operations = await server.operations()
       .forTransaction(transactionHash)
       .call();
-console.log('Transaction found:', transactionData);
     const formattedTransaction = {
       id: transactionData.id,
       hash: transactionData.hash,
@@ -320,7 +341,7 @@ console.log('Transaction found:', transactionData);
       }
     }
 
-    const dztOperations = formattedTransaction.operations.filter(op => 
+    const targetOperations = formattedTransaction.operations.filter(op => 
       op.type === 'payment' && 
       op.asset_code === 'DZT' && 
       op.asset_issuer === 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV'
@@ -341,12 +362,12 @@ console.log('Transaction found:', transactionData);
       success: true,
       found: true,
       transaction: formattedTransaction,
-      has_dzt_operations: dztOperations.length > 0,
-      dzt_operations_count: dztOperations.length,
+      has_dzt_operations: targetOperations.length > 0,
+      dzt_operations_count: targetOperations.length,
       payment_operations_count: formattedTransaction.operations.length,
-      dzt_operations: dztOperations,
+      dzt_operations: targetOperations,
       hash: transactionHash,
-      message: `Transaction found with ${formattedTransaction.operations.length} payment operations (${dztOperations.length} DZT payments)`
+      message: `Transaction found with ${formattedTransaction.operations.length} payment operations (${targetOperations.length} payments)`
     };
 
   } catch (error) {

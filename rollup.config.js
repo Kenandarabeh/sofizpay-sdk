@@ -2,7 +2,7 @@ import resolve from '@rollup/plugin-node-resolve';
 
 export default {
   input: 'src/index.js',
-  external: ['stellar-sdk', 'axios'],
+  external: ['stellar-sdk', 'axios', 'node-forge'],
   output: [
     {
       file: 'dist/sofizpay-sdk.cjs.js',
@@ -20,9 +20,11 @@ export default {
       exports: 'default',
       globals: {
         'stellar-sdk': 'StellarSdk',
-        'axios': 'axios'
+        'axios': 'axios',
+        'node-forge': 'forge'
       }
     }
+
   ],
   plugins: [
     resolve()

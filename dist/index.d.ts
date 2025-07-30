@@ -3,8 +3,6 @@ export interface SubmitData {
   destinationPublicKey: string;
   amount: number;
   memo: string;
-  assetCode?: string;
-  assetIssuer?: string;
 }
 
 export interface TransactionResult {
@@ -16,6 +14,7 @@ export interface TransactionResult {
   destinationPublicKey: string;
   duration: number;
   timestamp: string;
+  error?: string;
 }
 
 export interface Transaction {
@@ -43,6 +42,7 @@ export interface TransactionsResult {
   publicKey: string;
   message?: string;
   timestamp: string;
+  error?: string;
 }
 
 export interface BalanceResult {
@@ -52,6 +52,7 @@ export interface BalanceResult {
   asset_code: string;
   asset_issuer: string;
   timestamp: string;
+  error?: string;
 }
 
 export interface PublicKeyResult {
@@ -75,7 +76,7 @@ export interface StreamStatus {
   isActive: boolean;
   publicKey: string;
   streamInfo: {
-    secretkey: string;
+    publicKey: string;
     startTime: string;
     isActive: boolean;
   } | null;
@@ -104,11 +105,53 @@ export interface TransactionSearchResult {
     paging_token: string;
     operations: Array<any>;
   } | null;
-  has_dzt_operations?: boolean;
-  dzt_operations_count?: number;
-  dzt_operations?: Array<any>;
+  has_operations?: boolean;
+  operations_count?: number;
+  operations?: Array<any>;
   hash: string;
   message: string;
+  error?: string;
+  timestamp: string;
+}
+
+export interface CIBTransactionData {
+  account: string;
+  amount: number;
+  full_name: string;
+  phone: string;
+  email: string;
+  return_url?: string;
+  memo?: string;
+  redirect?: string;
+}
+
+export interface CIBTransactionResult {
+  success: boolean;
+  data?: any;
+  url?: string;
+  account: string;
+  amount: number;
+  full_name: string;
+  phone: string;
+  email: string;
+  memo?: string;
+  error?: string;
+  timestamp: string;
+}
+
+export interface SignatureVerificationData {
+  message: string;
+  signature_url_safe: string;
+}
+
+export interface SignatureVerificationResult {
+  success: boolean;
+  message: string;
+  signature: string | null;
+  signature_url_safe: string;
+  publicKeyPath: string;
+  verified: boolean;
+  feedback: string;
   error?: string;
   timestamp: string;
 }
@@ -118,21 +161,25 @@ export default class SofizPaySDK {
   
   submit(data: SubmitData): Promise<TransactionResult>;
   
-  getTransactions(secretkey: string): Promise<TransactionsResult>;
+  getTransactions(publicKey: string): Promise<TransactionsResult>;
   
-  searchTransactionsByMemo(secretkey: string, memo: string, limit?: number): Promise<TransactionsResult>;
+  searchTransactionsByMemo(publicKey: string, memo: string, limit?: number): Promise<TransactionsResult>;
   
   getTransactionByHash(transactionHash: string): Promise<TransactionSearchResult>;
   
-  getDZTBalance(secretkey: string): Promise<BalanceResult>;
+  getBalance(publicKey: string): Promise<BalanceResult>;
   
   getPublicKey(secretkey: string): Promise<PublicKeyResult>;
   
-  startTransactionStream(secretkey: string, onNewTransaction: (transaction: Transaction) => void): Promise<StreamResult>;
+  startTransactionStream(publicKey: string, onNewTransaction: (transaction: Transaction) => void): Promise<StreamResult>;
   
-  stopTransactionStream(secretkey: string): Promise<StreamResult>;
+  stopTransactionStream(publicKey: string): Promise<StreamResult>;
   
-  getStreamStatus(secretkey: string): Promise<StreamStatus>;
+  getStreamStatus(publicKey: string): Promise<StreamStatus>;
+  
+  makeCIBTransaction(transactionData: CIBTransactionData): Promise<CIBTransactionResult>;
+  
+  verifySignature(verificationData: SignatureVerificationData): boolean;
   
   getVersion(): string;
 }

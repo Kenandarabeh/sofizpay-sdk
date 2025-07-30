@@ -3,8 +3,6 @@ export interface SubmitData {
   destinationPublicKey: string;
   amount: number;
   memo: string;
-  assetCode?: string;
-  assetIssuer?: string;
 }
 
 export interface TransactionResult {
@@ -107,11 +105,53 @@ export interface TransactionSearchResult {
     paging_token: string;
     operations: Array<any>;
   } | null;
-  has_dzt_operations?: boolean;
-  dzt_operations_count?: number;
-  dzt_operations?: Array<any>;
+  has_operations?: boolean;
+  operations_count?: number;
+  operations?: Array<any>;
   hash: string;
   message: string;
+  error?: string;
+  timestamp: string;
+}
+
+export interface CIBTransactionData {
+  account: string;
+  amount: number;
+  full_name: string;
+  phone: string;
+  email: string;
+  return_url?: string;
+  memo?: string;
+  redirect?: string;
+}
+
+export interface CIBTransactionResult {
+  success: boolean;
+  data?: any;
+  url?: string;
+  account: string;
+  amount: number;
+  full_name: string;
+  phone: string;
+  email: string;
+  memo?: string;
+  error?: string;
+  timestamp: string;
+}
+
+export interface SignatureVerificationData {
+  message: string;
+  signature_url_safe: string;
+}
+
+export interface SignatureVerificationResult {
+  success: boolean;
+  message: string;
+  signature: string | null;
+  signature_url_safe: string;
+  publicKeyPath: string;
+  verified: boolean;
+  feedback: string;
   error?: string;
   timestamp: string;
 }
@@ -127,7 +167,7 @@ export default class SofizPaySDK {
   
   getTransactionByHash(transactionHash: string): Promise<TransactionSearchResult>;
   
-  getDZTBalance(publicKey: string): Promise<BalanceResult>;
+  getBalance(publicKey: string): Promise<BalanceResult>;
   
   getPublicKey(secretkey: string): Promise<PublicKeyResult>;
   
@@ -136,6 +176,10 @@ export default class SofizPaySDK {
   stopTransactionStream(publicKey: string): Promise<StreamResult>;
   
   getStreamStatus(publicKey: string): Promise<StreamStatus>;
+  
+  makeCIBTransaction(transactionData: CIBTransactionData): Promise<CIBTransactionResult>;
+  
+  verifySignature(verificationData: SignatureVerificationData): boolean;
   
   getVersion(): string;
 }

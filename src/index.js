@@ -1,12 +1,15 @@
-import { sendPayment, getDZTTransactions, getPublicKeyFromSecret, getDZTBalance, setupTransactionStream, getTransactionByHash } from './stellarUtils.js';
+import { sendPayment, getTransactions, getPublicKeyFromSecret, getBalance, setupTransactionStream, getTransactionByHash } from './stellarUtils.js';
+import axios from 'axios';
+import forge from 'node-forge';
 
 class SofizPaySDK {
   constructor() {
-    this.version = '1.0.0';
+    this.version = '1.1.7';
     this.activeStreams = new Map();
     this.transactionCallbacks = new Map();
+    this.streamCloseFunctions = new Map(); 
   }
-
+  
   async submit(data) {
     if (!data.secretkey) {
       throw new Error('Secret key is required.');
@@ -20,14 +23,12 @@ class SofizPaySDK {
     if (!data.memo) {
       throw new Error('Memo is required.');
     }
-
+    
     try {
       const result = await sendPayment(
         data.secretkey,
         data.destinationPublicKey,
         data.amount,
-        data.assetCode || 'DZT',
-        data.assetIssuer || 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV',
         data.memo
       );
 
@@ -61,9 +62,9 @@ class SofizPaySDK {
 
     try {
 
-      const dztTransactions = await getDZTTransactions(publicKey,limit);
+      const transactions = await getTransactions(publicKey,limit);
       
-      const formattedTransactions = dztTransactions.map(tx => ({
+      const formattedTransactions = transactions.map(tx => ({
         id: tx.hash,
         transactionId: tx.hash,
         hash: tx.hash,
@@ -98,14 +99,14 @@ class SofizPaySDK {
     }
   }
 
-  async getDZTBalance(publicKey) {
+  async getBalance(publicKey) {
     if (!publicKey) {
       throw new Error('Public key is required.');
     }
 
     try {
       
-      const balance = await getDZTBalance(publicKey);
+      const balance = await getBalance(publicKey);
       
       return {
         success: true,
@@ -116,7 +117,7 @@ class SofizPaySDK {
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      console.error('Error fetching DZT balance:', error);
+      console.error('Error fetching balance:', error);
       return {
         success: false,
         error: error.message,
@@ -133,7 +134,6 @@ class SofizPaySDK {
 
     try {
       const publicKey = getPublicKeyFromSecret(secretkey);
-      
       return {
         success: true,
         publicKey: publicKey,
@@ -151,12 +151,15 @@ class SofizPaySDK {
     }
   }
 
-  async startTransactionStream(publicKey, onNewTransaction) {
+  async startTransactionStream(publicKey, onNewTransaction, fromNow = true, checkInterval = 30) {
     if (!publicKey) {
       throw new Error('public Key is required.');
     }
     if (!onNewTransaction || typeof onNewTransaction !== 'function') {
       throw new Error('Callback function is required.');
+    }
+    if (checkInterval < 5 || checkInterval > 300) {
+      throw new Error('Check interval must be between 5 and 300 seconds.');
     }
 
     try {
@@ -167,6 +170,47 @@ class SofizPaySDK {
           error: 'Transaction stream already active for this account',
           publicKey: publicKey
         };
+      }
+
+      if (!fromNow) {
+        try {
+          const previousTransactions = await getTransactions(publicKey, 200);
+          
+          if (previousTransactions && previousTransactions.length > 0) {
+            for (const tx of previousTransactions.reverse()) { 
+              const formattedTransaction = {
+                id: tx.hash,
+                transactionId: tx.hash,
+                hash: tx.hash,
+                amount: parseFloat(tx.amount),
+                memo: tx.memo,
+                type: tx.type,
+                from: tx.from,
+                to: tx.to,
+                asset_code: tx.asset_code,
+                asset_issuer: tx.asset_issuer,
+                status: 'completed',
+                timestamp: tx.created_at,
+                created_at: tx.created_at,
+                processed_at: tx.created_at,
+                isHistorical: true 
+              };
+              
+              onNewTransaction(formattedTransaction);
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            
+            onNewTransaction({
+              id: 'HISTORY_COMPLETE',
+              isHistoryComplete: true,
+              historicalCount: previousTransactions.length,
+              message: `Loaded ${previousTransactions.length} historical transactions, now listening for new transactions...`
+            });
+          }
+          
+        } catch (error) {
+          console.warn('Could not load previous transactions:', error);
+        }
       }
 
       const transactionHandler = (newTransaction) => {
@@ -184,26 +228,35 @@ class SofizPaySDK {
           status: newTransaction.status,
           timestamp: newTransaction.created_at,
           created_at: newTransaction.created_at,
-          processed_at: newTransaction.processed_at
+          processed_at: newTransaction.processed_at,
+          isHistorical: false 
         };
 
         onNewTransaction(formattedTransaction);
       };
 
-      setupTransactionStream(publicKey, transactionHandler);
+      const closeFunction = setupTransactionStream(publicKey, transactionHandler, fromNow, checkInterval);
+      
+      if (closeFunction && typeof closeFunction === 'function') {
+        this.streamCloseFunctions.set(publicKey, closeFunction);
+      }
       
       this.activeStreams.set(publicKey, {
         publicKey: publicKey,
         startTime: new Date().toISOString(),
-        isActive: true
+        isActive: true,
+        fromNow: fromNow,
+        checkInterval: checkInterval
       });
       
       this.transactionCallbacks.set(publicKey, onNewTransaction);
 
       return {
         success: true,
-        message: 'Transaction stream started successfully',
+        message: `Transaction stream started successfully (${fromNow ? 'from now' : 'with history'}, checking every ${checkInterval}s)`,
         publicKey: publicKey,
+        fromNow: fromNow,
+        checkInterval: checkInterval,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
@@ -231,6 +284,16 @@ class SofizPaySDK {
         };
       }
 
+      const streamInfo = this.activeStreams.get(publicKey);
+
+      if (this.streamCloseFunctions && this.streamCloseFunctions.has(publicKey)) {
+        const closeFunction = this.streamCloseFunctions.get(publicKey);
+        if (typeof closeFunction === 'function') {
+          closeFunction();
+        }
+        this.streamCloseFunctions.delete(publicKey);
+      }
+
       this.activeStreams.delete(publicKey);
       this.transactionCallbacks.delete(publicKey);
 
@@ -238,6 +301,7 @@ class SofizPaySDK {
         success: true,
         message: 'Transaction stream stopped successfully',
         publicKey: publicKey,
+        streamInfo: streamInfo,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
@@ -289,9 +353,9 @@ class SofizPaySDK {
 
     try {
       
-      const dztTransactions = await getDZTTransactions(publicKey, 200);
+      const transactions = await getTransactions(publicKey, 200);
       
-      if (!dztTransactions || !Array.isArray(dztTransactions)) {
+      if (!transactions || !Array.isArray(transactions)) {
         return {
           success: true,
           transactions: [],
@@ -304,7 +368,7 @@ class SofizPaySDK {
         };
       }
       
-      const filteredTransactions = dztTransactions.filter(tx => {
+      const filteredTransactions = transactions.filter(tx => {
         if (!tx || !tx.memo) return false;
         
         try {
@@ -328,7 +392,7 @@ class SofizPaySDK {
             type: tx.type || 'unknown', 
             from: tx.from || 'unknown',
             to: tx.to || 'unknown',
-            asset_code: tx.asset_code || 'DZT',
+            asset_code: tx.asset_code || '',
             asset_issuer: tx.asset_issuer || '',
             status: 'completed',
             timestamp: tx.created_at || new Date().toISOString(),
@@ -375,9 +439,9 @@ class SofizPaySDK {
           success: true,
           found: true,
           transaction: result.transaction,
-          has_dzt_operations: result.has_dzt_operations,
-          dzt_operations_count: result.dzt_operations_count,
-          dzt_operations: result.dzt_operations,
+          has_operations: result.has_dzt_operations,
+          operations_count: result.dzt_operations_count,
+          operations: result.dzt_operations,
           hash: transactionHash,
           message: result.message,
           timestamp: new Date().toISOString()
@@ -403,6 +467,132 @@ class SofizPaySDK {
         error: error.message,
         timestamp: new Date().toISOString()
       };
+    }
+  }
+
+  async makeCIBTransaction(transactionData) {
+    if (!transactionData.account) {
+      throw new Error('Account is required.');
+    }
+    if (!transactionData.amount || transactionData.amount <= 0) {
+      throw new Error('Valid amount is required.');
+    }
+    if (!transactionData.full_name) {
+      throw new Error('Full name is required.');
+    }
+    if (!transactionData.phone) {
+      throw new Error('Phone number is required.');
+    }
+    if (!transactionData.email) {
+      throw new Error('Email is required.');
+    }
+
+    try {
+      const baseUrl = 'https:www.sofizpay.com/make-cib-transaction';
+      const params = new URLSearchParams();
+      
+      params.append('account', transactionData.account);
+      params.append('amount', transactionData.amount.toString());
+      params.append('full_name', transactionData.full_name);
+      params.append('phone', transactionData.phone);
+      params.append('email', transactionData.email);
+      
+      if (transactionData.return_url) {
+        params.append('return_url', transactionData.return_url);
+      }
+      if (transactionData.memo) {
+        params.append('memo', transactionData.memo);
+      }
+      if (transactionData.redirect !== undefined) {
+        params.append('redirect', transactionData.redirect);
+      }
+
+      const fullUrl = `${baseUrl}?${params.toString()}`;
+      
+      const response = await axios.get(fullUrl, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      return {
+        success: true,
+        data: response.data,
+        url: fullUrl,
+        account: transactionData.account,
+        amount: transactionData.amount,
+        full_name: transactionData.full_name,
+        phone: transactionData.phone,
+        email: transactionData.email,
+        memo: transactionData.memo,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Error making CIB transaction:', error);
+      
+      let errorMessage = error.message;
+      
+      if (error.response) {
+        errorMessage = `HTTP Error: ${error.response.status} - ${error.response.statusText}`;
+        if (error.response.data && error.response.data.error) {
+          errorMessage += ` - ${error.response.data.error}`;
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error: No response received from server';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timeout: Server took too long to respond';
+      }
+      
+      return {
+        success: false,
+        error: errorMessage,
+        account: transactionData.account,
+        amount: transactionData.amount,
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+verifySignature(verificationData) {
+    if (!verificationData.message) {
+      return false;
+    }
+    if (!verificationData.signature_url_safe) {
+      return false;
+    }
+
+    const publicKeyPem = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1N+bDPxpqeB9QB0affr/
+02aeRXAAnqHuLrgiUlVNdXtF7t+2w8pnEg+m9RRlc+4YEY6UyKTUjVe6k7v2p8Jj
+UItk/fMNOEg/zY222EbqsKZ2mF4hzqgyJ3QHPXjZEEqABkbcYVv4ZyV2Wq0x0ykI
++Hy/5YWKeah4RP2uEML1FlXGpuacnMXpW6n36dne3fUN+OzILGefeRpmpnSGO5+i
+JmpF2mRdKL3hs9WgaLSg6uQyrQuJA9xqcCpUmpNbIGYXN9QZxjdyRGnxivTE8awx
+THV3WRcKrP2krz3ruRGF6yP6PVHEuPc0YDLsYjV5uhfs7JtIksNKhRRAQ16bAsj/
+9wIDAQAB
+-----END PUBLIC KEY-----`;
+
+    try {
+      let base64 = verificationData.signature_url_safe
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+      
+      while (base64.length % 4) {
+        base64 += '=';
+      }
+      
+      const signatureBytes = forge.util.decode64(base64);
+      
+      const publicKey = forge.pki.publicKeyFromPem(publicKeyPem);
+      
+      const md = forge.md.sha256.create();
+      md.update(verificationData.message, 'utf8');
+      
+      return publicKey.verify(md.digest().bytes(), signatureBytes);
+      
+    } catch (error) {
+      console.error('Signature verification error:', error);
+      return false;
     }
   }
 }
