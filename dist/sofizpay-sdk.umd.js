@@ -417,7 +417,7 @@
 
   class SofizPaySDK {
     constructor() {
-      this.version = '1.1.7';
+      this.version = '1.1.8';
       this.activeStreams = new Map();
       this.transactionCallbacks = new Map();
       this.streamCloseFunctions = new Map(); 
@@ -901,7 +901,7 @@
       }
 
       try {
-        const baseUrl = 'https:www.sofizpay.com/make-cib-transaction';
+        const baseUrl = 'https:www.sofizpay.com/make-cib-transaction/';
         const params = new URLSearchParams();
         
         params.append('account', transactionData.account);
@@ -928,17 +928,9 @@
             'Content-Type': 'application/json'
           }
         });
-
         return {
           success: true,
           data: response.data,
-          url: fullUrl,
-          account: transactionData.account,
-          amount: transactionData.amount,
-          full_name: transactionData.full_name,
-          phone: transactionData.phone,
-          email: transactionData.email,
-          memo: transactionData.memo,
           timestamp: new Date().toISOString()
         };
       } catch (error) {

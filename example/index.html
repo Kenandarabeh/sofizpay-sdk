@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SofizPay SDK JS - makeCIBTransaction Test</title>
+  <link rel="icon" href="assets/sofizpay-logo.png">
+  <style>
+    body { font-family: Arial, sans-serif; background: #f7f7f7; margin: 0; padding: 0; }
+    .container { max-width: 420px; margin: 40px auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; padding: 32px; }
+    h2 { text-align: center; color: #1a6cff; }
+    label { display: block; margin-top: 16px; font-weight: bold; }
+    input, textarea { width: 100%; padding: 8px; margin-top: 4px; border-radius: 4px; border: 1px solid #ccc; }
+    button { margin-top: 24px; width: 100%; padding: 12px; background: #1a6cff; color: #fff; border: none; border-radius: 4px; font-size: 1.1em; cursor: pointer; }
+    button:disabled { background: #aaa; }
+    .result { margin-top: 24px; padding: 12px; border-radius: 4px; background: #f0f8ff; font-size: 0.98em; }
+    .error { background: #ffeaea; color: #c00; }
+    .success { background: #eaffea; color: #080; }
+    .logo { display: block; margin: 0 auto 16px auto; width: 80px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="assets/sofizpay-logo.png" alt="SofizPay Logo" class="logo" />
+    <h2>Test makeCIBTransaction</h2>
+    <form id="cibForm">
+      <label>Account</label>
+      <input type="text" id="account" required placeholder="User account identifier">
+      <label>Amount</label>
+      <input type="number" id="amount" required min="0.01" step="0.01" placeholder="Amount">
+      <label>Full Name</label>
+      <input type="text" id="full_name" required placeholder="Full name">
+      <label>Phone</label>
+      <input type="text" id="phone" required placeholder="Phone number">
+      <label>Email</label>
+      <input type="email" id="email" required placeholder="Email address">
+      <label>Memo (optional)</label>
+      <input type="text" id="memo" placeholder="Memo">
+      <label>Return URL (optional)</label>
+      <input type="url" id="return_url" placeholder="https://yourdomain.com/return">
+      <label><input type="checkbox" id="redirect"> Redirect after payment</label>
+      <button type="submit">Create CIB Transaction</button>
+    </form>
+    <div id="result" class="result" style="display:none;"></div>
+  </div>
+
+  <!-- Dependencies from CDN -->
+  <script src="https://unpkg.com/stellar-sdk@12.3.0/dist/stellar-sdk.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
+  <script src="https://unpkg.com/axios@1.10.0/dist/axios.min.js"></script>
+  <script src="https://unpkg.com/sofizpay-sdk-js@latest/dist/sofizpay-sdk.umd.js"></script>
+  <script>
+    const sdk = new SofizPaySDK();
+    const form = document.getElementById('cibForm');
+    const resultDiv = document.getElementById('result');
+
+    form.onsubmit = async (e) => {
+	var redirect = 'no';
+      e.preventDefault();
+      resultDiv.style.display = 'none';
+      resultDiv.className = 'result';
+      resultDiv.textContent = 'Processing...';
+      resultDiv.style.display = 'block';
+	  if( form.redirect.checked) {
+		redirect = 'yes';
+	  }
+      const data = {
+        account: form.account.value.trim(),
+        amount: parseFloat(form.amount.value),
+        full_name: form.full_name.value.trim(),
+        phone: form.phone.value.trim(),
+        email: form.email.value.trim(),
+        memo: form.memo.value.trim() || undefined,
+        return_url: form.return_url.value.trim() || undefined,
+        redirect: redirect
+      };
+      try {
+        const res = await sdk.makeCIBTransaction(data);
+		console.log('Response:', res);
+        if (res.success) {
+          resultDiv.className = 'result success';
+          resultDiv.innerHTML = `<b>Success!</b><br>Payment URL: <a href="${res.data.payment_url}" target="_blank">${res.data.payment_url}</a>`;
+        } else {
+          resultDiv.className = 'result error';
+          resultDiv.textContent = 'Error: ' + (res.error || 'Unknown error');
+        }
+      } catch (err) {
+        resultDiv.className = 'result error';
+        resultDiv.textContent = 'Exception: ' + err.message;
+      }
+    };
+  </script>
+</body>
+</html>

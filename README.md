@@ -259,11 +259,11 @@ if (orderPayments.success && orderPayments.transactions.length > 0) {
 ```javascript
 // Create bank transaction
 const bankResult = await sdk.makeCIBTransaction({
-  account: 'YOUR_SECRET_KEY',
+  account: 'YOUR_PUBLIC_KEY',
   amount: 150,
-  full_name: 'Ahmed',
+  full_name: 'YOUR_NAME',
   phone: '+213*********',
-  email: 'ahmed@sofizpay.com',
+  email: 'YOUR_EMAIL',
   memo: 'Payment',
   return_url: 'https://yoursite.com/payment-success',
   redirect: true
@@ -451,4 +451,4 @@ MIT © [SofizPay Team](https://github.com/kenandarabeh)
 
 ---
 
-**Built with ❤️ for Sofizpay | Version `1.1.7`**
+**Built with ❤️ for Sofizpay | Version `1.1.8`**
