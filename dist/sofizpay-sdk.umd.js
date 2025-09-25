@@ -43,7 +43,108 @@
     }
   };
 
-  const setupTransactionStream = (publicKey, addTransaction, fromNow = true, checkInterval = 30) => {
+  // دالة للتحقق من صحة الـ public key
+  const isValidPublicKey = (publicKey) => {
+    try {
+      StellarSdk__namespace.Keypair.fromPublicKey(publicKey);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  // دالة محسنة لجلب الرصيد مع معالجة أفضل للأخطاء
+  const getBalance = async (publicKey) => {
+    try {
+      // التحقق من صحة الـ public key
+      if (!publicKey || typeof publicKey !== 'string') {
+        throw new Error('Invalid public key: must be a non-empty string');
+      }
+
+      if (!isValidPublicKey(publicKey)) {
+        throw new Error('Invalid public key format');
+      }
+
+      console.log('Fetching balance for public key:', publicKey);
+
+      // محاولة جلب بيانات الحساب مع إعادة المحاولة
+      let account;
+      try {
+        account = await server.loadAccount(publicKey);
+      } catch (error) {
+        console.error('Error loading account:', error);
+        
+        if (error.response && error.response.status === 404) {
+          throw new Error('Account not found. The account might not be activated on Stellar network.');
+        } else if (error.response && error.response.status === 400) {
+          throw new Error('Bad request. Please check if the public key is valid.');
+        } else {
+          throw new Error(`Failed to load account: ${error.message}`);
+        }
+      }
+
+      if (!account) {
+        throw new Error('Account data is empty');
+      }
+
+      if (!account.balances || !Array.isArray(account.balances)) {
+        throw new Error('Account balances data is invalid');
+      }
+
+      console.log('Account balances:', account.balances);
+
+      // البحث عن رصيد DZT
+      const dztAsset = account.balances.find(balance => 
+        balance.asset_code === 'DZT' && 
+        balance.asset_issuer === 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV'
+      );
+      
+      if (!dztAsset) {
+        console.warn('DZT asset not found in account balances');
+        return 0;
+      }
+
+      const balanceValue = parseFloat(dztAsset.balance);
+      
+      if (isNaN(balanceValue)) {
+        console.warn('Invalid balance value:', dztAsset.balance);
+        return 0;
+      }
+
+      console.log('DZT balance found:', balanceValue);
+      return balanceValue;
+
+    } catch (error) {
+      console.error('Error in getBalance:', error);
+      throw error;
+    }
+  };
+
+  // دالة محسنة لجلب الـ public key من الـ secret key
+  const getPublicKeyFromSecret = (secretKey) => {
+    try {
+      if (!secretKey || typeof secretKey !== 'string') {
+        throw new Error('Invalid secret key: must be a non-empty string');
+      }
+
+      if (!secretKey.startsWith('S') || secretKey.length !== 56) {
+        throw new Error('Invalid secret key format. Secret keys should start with S and be 56 characters long.');
+      }
+
+      const keypair = StellarSdk__namespace.Keypair.fromSecret(secretKey);
+      const publicKey = keypair.publicKey();
+      
+      console.log('Generated public key:', publicKey);
+      return publicKey;
+      
+    } catch (error) {
+      console.error('Error extracting public key from secret:', error);
+      throw new Error(`Failed to extract public key: ${error.message}`);
+    }
+  };
+
+  // باقي الدوال بدون تغيير
+  const setupTransactionStream = (publicKey, addTransaction, cursor = 'now', fromNow = true, checkInterval = 30) => {
     let streamCloseFunction = null;
     
     const txHandler = async (txResponse) => {
@@ -82,11 +183,10 @@
 
     const startStream = () => {
       try {
-        
         const streamBuilder = server.transactions()
           .forAccount(publicKey)
-          .cursor('now'); 
-        
+          .cursor(cursor); // <<-- هنا التغيير الرئيسي      
+          
         const eventSource = streamBuilder.stream({
           onmessage: txHandler,
           onerror: async (error) => {
@@ -105,7 +205,6 @@
           reconnectTimeout: checkInterval * 1000
         });
         
-       
         streamCloseFunction = () => {
           if (eventSource && typeof eventSource.close === 'function') {
             eventSource.close();
@@ -121,9 +220,9 @@
     };
 
     startStream();
-    
     return streamCloseFunction;
   };
+
   const sendPayment = async (sourceKey, destinationPublicKey, amount, memo = null) => {
     const startTime = Date.now();
 
@@ -197,22 +296,6 @@
           
           if (error.response.data.extras.result_xdr) {
             console.error('Result XDR:', error.response.data.extras.result_xdr);
-            
-            try {
-              const resultDecoded = decodeResultXDR(error.response.data.extras.result_xdr);
-              console.error('Decoded result:', resultDecoded);
-            } catch (decodeError) {
-              console.error('Could not decode result XDR:', decodeError);
-            }
-          }
-          
-          if (error.response.data.extras.envelope_xdr) {
-            try {
-              const txDecoded = decodeTransactionXDR(error.response.data.extras.envelope_xdr);
-              console.error('Decoded transaction:', txDecoded);
-            } catch (decodeError) {
-              console.error('Could not decode transaction XDR:', decodeError);
-            }
           }
         }
       }
@@ -229,37 +312,21 @@
     }
   };
 
-  const getBalance = async (publicKey) => {
+  const getTransactions = async (publicKey, limit = 200,cursor = null) => {
     try {
-      const account = await server.loadAccount(publicKey);
-      const asset = account.balances.find(balance => 
-        balance.asset_code === 'DZT' && 
-        balance.asset_issuer === 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV'
-      );
-      
-      return asset ? parseFloat(asset.balance) : 0;
-    } catch (error) {
-      console.error('Error fetching balance:', error);
-      throw error;
-    }
-  };
-  const getPublicKeyFromSecret = (secretKey) => {
-    try {
-      const keypair = StellarSdk__namespace.Keypair.fromSecret(secretKey);
-      return keypair.publicKey();
-    } catch (error) {
-      console.error('Error extracting public key from secret:', error);
-      throw error;
-    }
-  };
-
-  const getTransactions = async (publicKey, limit = 200) => {
-    try {
-      const transactions = await server.transactions()
+      const query = await server.transactions()
         .forAccount(publicKey)
         .order('desc')
-        .limit(limit)
-        .call();
+        .limit(limit);
+
+      // إذا كان هناك cursor، استخدمه للبدء من تلك النقطة
+      if (cursor) {
+        query.cursor(cursor);
+      }
+
+      const transactions = await query.call();
+
+
       const filteredTransactions = [];
       
       for (const tx of transactions.records) {
@@ -280,6 +347,7 @@
                 amount: op.amount,
                 from: op.from,
                 to: op.to,
+                paging_token: tx.paging_token, // مهم: احصل على الـ token لكل معاملة
                 type: op.from === publicKey ? 'sent' : 'received',
                 asset_code: op.asset_code,
                 asset_issuer: op.asset_issuer
@@ -297,13 +365,13 @@
       throw error;
     }
   };
+
   const getTransactionByHash = async (transactionHash) => {
     if (!transactionHash) {
       throw new Error('Transaction hash is required.');
     }
 
     try {
-      
       const transactionData = await server.transactions()
         .transaction(transactionHash)
         .call();
@@ -417,7 +485,7 @@
 
   class SofizPaySDK {
     constructor() {
-      this.version = '1.1.8';
+      this.version = '1.1.11';
       this.activeStreams = new Map();
       this.transactionCallbacks = new Map();
       this.streamCloseFunctions = new Map(); 
@@ -468,15 +536,13 @@
       }
     }
 
-    async getTransactions(publicKey,limit = 50) {
+    async getTransactions(publicKey, limit = 50,cursor = null) {
       if (!publicKey) {
         throw new Error('public Key is required.');
       }
 
       try {
-
-        const transactions = await getTransactions(publicKey,limit);
-        
+        const transactions = await getTransactions(publicKey, limit, cursor);
         const formattedTransactions = transactions.map(tx => ({
           id: tx.hash,
           transactionId: tx.hash,
@@ -485,6 +551,7 @@
           memo: tx.memo,
           type: tx.type,
           from: tx.from,
+          paging_token: tx.paging_token,
           to: tx.to,
           asset_code: tx.asset_code,
           asset_issuer: tx.asset_issuer,
@@ -518,8 +585,11 @@
       }
 
       try {
+        console.log('SDK: Fetching balance for:', publicKey);
         
         const balance = await getBalance(publicKey);
+        
+        console.log('SDK: Balance result:', balance);
         
         return {
           success: true,
@@ -530,11 +600,24 @@
           timestamp: new Date().toISOString()
         };
       } catch (error) {
-        console.error('Error fetching balance:', error);
+        console.error('SDK: Error fetching balance:', error);
+        
+        // إعادة رسالة خطأ مفصلة أكثر
+        let errorMessage = error.message;
+        
+        if (error.message.includes('Account not found')) {
+          errorMessage = 'Account not found or not activated on Stellar network. Make sure the account has been funded with at least 1 XLM.';
+        } else if (error.message.includes('Bad request')) {
+          errorMessage = 'Invalid public key format. Please check that you are using a valid Stellar public key.';
+        } else if (error.message.includes('Invalid public key')) {
+          errorMessage = 'Invalid public key format. Public keys should start with G and be 56 characters long.';
+        }
+        
         return {
           success: false,
-          error: error.message,
+          error: errorMessage,
           balance: 0,
+          publicKey: publicKey,
           timestamp: new Date().toISOString()
         };
       }
@@ -564,7 +647,7 @@
       }
     }
 
-    async startTransactionStream(publicKey, onNewTransaction, fromNow = true, checkInterval = 30) {
+    async startTransactionStream(publicKey, onNewTransaction, fromNow = true, cursor = 'now', checkInterval = 30) {
       if (!publicKey) {
         throw new Error('public Key is required.');
       }
@@ -576,7 +659,6 @@
       }
 
       try {
-        
         if (this.activeStreams.has(publicKey)) {
           return {
             success: false,
@@ -585,46 +667,6 @@
           };
         }
 
-        if (!fromNow) {
-          try {
-            const previousTransactions = await getTransactions(publicKey, 200);
-            
-            if (previousTransactions && previousTransactions.length > 0) {
-              for (const tx of previousTransactions.reverse()) { 
-                const formattedTransaction = {
-                  id: tx.hash,
-                  transactionId: tx.hash,
-                  hash: tx.hash,
-                  amount: parseFloat(tx.amount),
-                  memo: tx.memo,
-                  type: tx.type,
-                  from: tx.from,
-                  to: tx.to,
-                  asset_code: tx.asset_code,
-                  asset_issuer: tx.asset_issuer,
-                  status: 'completed',
-                  timestamp: tx.created_at,
-                  created_at: tx.created_at,
-                  processed_at: tx.created_at,
-                  isHistorical: true 
-                };
-                
-                onNewTransaction(formattedTransaction);
-                await new Promise(resolve => setTimeout(resolve, 50));
-              }
-              
-              onNewTransaction({
-                id: 'HISTORY_COMPLETE',
-                isHistoryComplete: true,
-                historicalCount: previousTransactions.length,
-                message: `Loaded ${previousTransactions.length} historical transactions, now listening for new transactions...`
-              });
-            }
-            
-          } catch (error) {
-            console.warn('Could not load previous transactions:', error);
-          }
-        }
 
         const transactionHandler = (newTransaction) => {
           const formattedTransaction = {
@@ -636,6 +678,7 @@
             type: newTransaction.destination === publicKey ? 'received' : 'sent',
             from: newTransaction.source_account,
             to: newTransaction.destination,
+            paging_token: newTransaction.paging_token, 
             asset_code: newTransaction.asset_code,
             asset_issuer: newTransaction.asset_issuer,
             status: newTransaction.status,
@@ -648,8 +691,7 @@
           onNewTransaction(formattedTransaction);
         };
 
-        const closeFunction = setupTransactionStream(publicKey, transactionHandler, fromNow, checkInterval);
-        
+        const closeFunction = setupTransactionStream(publicKey, transactionHandler, cursor, checkInterval);      
         if (closeFunction && typeof closeFunction === 'function') {
           this.streamCloseFunctions.set(publicKey, closeFunction);
         }
@@ -688,7 +730,6 @@
       }
 
       try {
-        
         if (!this.activeStreams.has(publicKey)) {
           return {
             success: false,
@@ -765,7 +806,6 @@
       }
 
       try {
-        
         const transactions = await getTransactions(publicKey, 200);
         
         if (!transactions || !Array.isArray(transactions)) {

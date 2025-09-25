@@ -4,7 +4,7 @@ import forge from 'node-forge';
 
 class SofizPaySDK {
   constructor() {
-    this.version = '1.1.8';
+    this.version = '1.1.11';
     this.activeStreams = new Map();
     this.transactionCallbacks = new Map();
     this.streamCloseFunctions = new Map(); 
@@ -55,15 +55,13 @@ class SofizPaySDK {
     }
   }
 
-  async getTransactions(publicKey,limit = 50) {
+  async getTransactions(publicKey, limit = 50,cursor = null) {
     if (!publicKey) {
       throw new Error('public Key is required.');
     }
 
     try {
-
-      const transactions = await getTransactions(publicKey,limit);
-      
+      const transactions = await getTransactions(publicKey, limit, cursor);
       const formattedTransactions = transactions.map(tx => ({
         id: tx.hash,
         transactionId: tx.hash,
@@ -72,6 +70,7 @@ class SofizPaySDK {
         memo: tx.memo,
         type: tx.type,
         from: tx.from,
+        paging_token: tx.paging_token,
         to: tx.to,
         asset_code: tx.asset_code,
         asset_issuer: tx.asset_issuer,
@@ -105,8 +104,11 @@ class SofizPaySDK {
     }
 
     try {
+      console.log('SDK: Fetching balance for:', publicKey);
       
       const balance = await getBalance(publicKey);
+      
+      console.log('SDK: Balance result:', balance);
       
       return {
         success: true,
@@ -117,11 +119,24 @@ class SofizPaySDK {
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      console.error('Error fetching balance:', error);
+      console.error('SDK: Error fetching balance:', error);
+      
+      // إعادة رسالة خطأ مفصلة أكثر
+      let errorMessage = error.message;
+      
+      if (error.message.includes('Account not found')) {
+        errorMessage = 'Account not found or not activated on Stellar network. Make sure the account has been funded with at least 1 XLM.';
+      } else if (error.message.includes('Bad request')) {
+        errorMessage = 'Invalid public key format. Please check that you are using a valid Stellar public key.';
+      } else if (error.message.includes('Invalid public key')) {
+        errorMessage = 'Invalid public key format. Public keys should start with G and be 56 characters long.';
+      }
+      
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
         balance: 0,
+        publicKey: publicKey,
         timestamp: new Date().toISOString()
       };
     }
@@ -151,7 +166,7 @@ class SofizPaySDK {
     }
   }
 
-  async startTransactionStream(publicKey, onNewTransaction, fromNow = true, checkInterval = 30) {
+  async startTransactionStream(publicKey, onNewTransaction, fromNow = true, cursor = 'now', checkInterval = 30) {
     if (!publicKey) {
       throw new Error('public Key is required.');
     }
@@ -163,7 +178,6 @@ class SofizPaySDK {
     }
 
     try {
-      
       if (this.activeStreams.has(publicKey)) {
         return {
           success: false,
@@ -172,46 +186,6 @@ class SofizPaySDK {
         };
       }
 
-      if (!fromNow) {
-        try {
-          const previousTransactions = await getTransactions(publicKey, 200);
-          
-          if (previousTransactions && previousTransactions.length > 0) {
-            for (const tx of previousTransactions.reverse()) { 
-              const formattedTransaction = {
-                id: tx.hash,
-                transactionId: tx.hash,
-                hash: tx.hash,
-                amount: parseFloat(tx.amount),
-                memo: tx.memo,
-                type: tx.type,
-                from: tx.from,
-                to: tx.to,
-                asset_code: tx.asset_code,
-                asset_issuer: tx.asset_issuer,
-                status: 'completed',
-                timestamp: tx.created_at,
-                created_at: tx.created_at,
-                processed_at: tx.created_at,
-                isHistorical: true 
-              };
-              
-              onNewTransaction(formattedTransaction);
-              await new Promise(resolve => setTimeout(resolve, 50));
-            }
-            
-            onNewTransaction({
-              id: 'HISTORY_COMPLETE',
-              isHistoryComplete: true,
-              historicalCount: previousTransactions.length,
-              message: `Loaded ${previousTransactions.length} historical transactions, now listening for new transactions...`
-            });
-          }
-          
-        } catch (error) {
-          console.warn('Could not load previous transactions:', error);
-        }
-      }
 
       const transactionHandler = (newTransaction) => {
         const formattedTransaction = {
@@ -223,6 +197,7 @@ class SofizPaySDK {
           type: newTransaction.destination === publicKey ? 'received' : 'sent',
           from: newTransaction.source_account,
           to: newTransaction.destination,
+          paging_token: newTransaction.paging_token, 
           asset_code: newTransaction.asset_code,
           asset_issuer: newTransaction.asset_issuer,
           status: newTransaction.status,
@@ -235,8 +210,7 @@ class SofizPaySDK {
         onNewTransaction(formattedTransaction);
       };
 
-      const closeFunction = setupTransactionStream(publicKey, transactionHandler, fromNow, checkInterval);
-      
+      const closeFunction = setupTransactionStream(publicKey, transactionHandler, cursor, checkInterval);      
       if (closeFunction && typeof closeFunction === 'function') {
         this.streamCloseFunctions.set(publicKey, closeFunction);
       }
@@ -275,7 +249,6 @@ class SofizPaySDK {
     }
 
     try {
-      
       if (!this.activeStreams.has(publicKey)) {
         return {
           success: false,
@@ -352,7 +325,6 @@ class SofizPaySDK {
     }
 
     try {
-      
       const transactions = await getTransactions(publicKey, 200);
       
       if (!transactions || !Array.isArray(transactions)) {

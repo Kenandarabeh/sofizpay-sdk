@@ -266,7 +266,7 @@ const bankResult = await sdk.makeCIBTransaction({
   email: 'YOUR_EMAIL',
   memo: 'Payment',
   return_url: 'https://yoursite.com/payment-success',
-  redirect: true
+  redirect: 'yes' // or 'no'
 });
 
 if (bankResult.success) {
@@ -451,4 +451,4 @@ MIT © [SofizPay Team](https://github.com/kenandarabeh)
 
 ---
 
-**Built with ❤️ for Sofizpay | Version `1.1.8`**
+**Built with ❤️ for Sofizpay | Version `1.1.11`**
