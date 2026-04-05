@@ -156,12 +156,19 @@ export interface SignatureVerificationResult {
   timestamp: string;
 }
 
+export interface ServiceResult {
+  success: boolean;
+  data?: any;
+  error?: string;
+  timestamp: string;
+}
+
 export default class SofizPaySDK {
   constructor();
   
   submit(data: SubmitData): Promise<TransactionResult>;
   
-  getTransactions(publicKey: string): Promise<TransactionsResult>;
+  getTransactions(publicKey: string, limit?: number, cursor?: string | null): Promise<TransactionsResult>;
   
   searchTransactionsByMemo(publicKey: string, memo: string, limit?: number): Promise<TransactionsResult>;
   
@@ -171,13 +178,29 @@ export default class SofizPaySDK {
   
   getPublicKey(secretkey: string): Promise<PublicKeyResult>;
   
-  startTransactionStream(publicKey: string, onNewTransaction: (transaction: Transaction) => void): Promise<StreamResult>;
+  startTransactionStream(publicKey: string, onNewTransaction: (transaction: Transaction) => void, fromNow?: boolean, cursor?: string, checkInterval?: number): Promise<StreamResult>;
   
   stopTransactionStream(publicKey: string): Promise<StreamResult>;
   
   getStreamStatus(publicKey: string): Promise<StreamStatus>;
   
   makeCIBTransaction(transactionData: CIBTransactionData): Promise<CIBTransactionResult>;
+
+  rechargePhone(data: any): Promise<ServiceResult>;
+
+  rechargeInternet(data: any): Promise<ServiceResult>;
+
+  rechargeGame(data: any): Promise<ServiceResult>;
+
+  payBill(data: any): Promise<ServiceResult>;
+
+  getOperationDetails(operationId: string, encryptedSecretKey: string): Promise<ServiceResult>;
+
+  getOperationHistory(encryptedSecretKey: string, limit?: number, offset?: number): Promise<ServiceResult>;
+
+  getProducts(encryptedSecretKey?: string): Promise<ServiceResult>;
+
+  checkCIBStatus(cibTransactionId: string): Promise<ServiceResult>;
   
   verifySignature(verificationData: SignatureVerificationData): boolean;
   
