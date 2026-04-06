@@ -21,7 +21,6 @@
 - [Digital Services (Missions)](#digital-services-missions)
 - [Bank Integration (CIB)](#bank-integration-cib)
 - [Real-time Transaction Streaming](#real-time-transaction-streaming)
-- [Webhook Signature Verification](#webhook-signature-verification)
 - [Response Format](#response-format)
 - [Security Best Practices](#security-best-practices)
 - [Use Cases](#use-cases)
@@ -31,7 +30,7 @@
 
 ## 🌟 Overview
 
-The SofizPay JS SDK is a full-featured library for integrating **DZT digital payments** into any JavaScript environment — **Node.js**, **React**, **Vue**, or plain **Browser**. It provides a clean async API for on-chain Stellar payments, exhaustive transaction history, CIB bank deposits, digital service recharges (Missions), and webhook signature verification.
+The SofizPay JS SDK is a full-featured library for integrating **DZT digital payments** into any JavaScript environment — **Node.js**, **React**, **Vue**, or plain **Browser**. It provides a clean async API for on-chain Stellar payments, exhaustive transaction history, CIB bank deposits, and digital service recharges (Missions).
 
 **Key Benefits:**
 - ⚡ `async/await` API — no callback hell
@@ -59,7 +58,6 @@ Load the following scripts in order before the SDK:
 
 ```html
 <script src="https://unpkg.com/stellar-sdk@12.3.0/dist/stellar-sdk.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
 <script src="https://unpkg.com/axios@1.10.0/dist/axios.min.js"></script>
 <script src="https://unpkg.com/sofizpay-sdk-js@latest/dist/sofizpay-sdk.umd.js"></script>
 ```
@@ -250,7 +248,6 @@ if (tx.success && tx.found) {
 | `getProducts(encSk?)` | `string?` | `ServiceResult` | List available products |
 | `getOperationHistory(encSk, limit, offset)` | `string, number, number` | `ServiceResult` | Mission history |
 | `getOperationDetails(id, encSk)` | `string, string` | `ServiceResult` | Single operation details |
-| `verifySignature(data)` | `{message, signature_url_safe}` | `boolean` | Validate RSA webhook |
 
 ---
 
@@ -412,28 +409,6 @@ console.log('Active:', status.isActive);
 await sdk.stopTransactionStream('YOUR_PUBLIC_KEY');
 ```
 
----
-
-## 🔒 Webhook Signature Verification
-
-SofizPay signs all webhook events with RSA-SHA256. Use `verifySignature()` on your server to confirm authenticity before processing any payment event.
-
-```javascript
-// Express.js webhook handler
-app.post('/webhook/sofizpay', express.json(), (req, res) => {
-  const { message, signature_url_safe } = req.body;
-
-  const isValid = sdk.verifySignature({ message, signature_url_safe });
-
-  if (!isValid) {
-    return res.status(400).json({ error: 'Invalid signature' });
-  }
-
-  // ✅ Verified — safely process the event
-  console.log('Confirmed payment event:', message);
-  res.status(200).json({ status: 'received' });
-});
-```
 
 ---
 
@@ -467,7 +442,6 @@ Always guard with `if (result.success)` before accessing data fields.
 |------|-----|
 | ❌ Never expose secret keys client-side | Frontend code is visible to all users |
 | ✅ Use environment variables | `process.env.SECRET_KEY` — never hardcode |
-| ✅ Verify webhook signatures | Prevents forged payment notifications |
 | ✅ Keep `encrypted_sk` server-side | Protects Mission API access |
 | ✅ Use HTTPS only | Ensure all network calls are encrypted |
 
