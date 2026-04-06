@@ -261,9 +261,9 @@ Mission APIs let your users spend DZT on real-world digital services. All Missio
 const result = await sdk.rechargePhone({
   encrypted_sk: 'USER_ENCRYPTED_SECRET_KEY',
   phone:        '0661000000',
-  operator:     'Mobilis',  // 'Mobilis' | 'Djezzy' | 'Ooredoo'
-  amount:       '100',
-  offer:        'Top'       // Offer type from getProducts()
+  operator:     'Mobilis',    // 'Mobilis' | 'Djezzy' | 'Ooredoo'
+  amount:       '100',        // 'amount' from getProducts()
+  offer:        'Top'         // 'name' from getProducts()
 });
 
 if (result.success) {
@@ -279,9 +279,9 @@ if (result.success) {
 const result = await sdk.rechargeInternet({
   encrypted_sk: 'USER_ENCRYPTED_SECRET_KEY',
   phone:        '0661000000',
-  operator:     'idoom',   // e.g., 'idoom'
-  amount:       '2000',
-  offer:        'adsl'     // Offer type from getProducts()
+  operator:     'idoom',     // e.g., 'idoom'
+  amount:       '2000',      // 'amount' from getProducts()
+  offer:        'adsl'       // 'name' from getProducts()
 });
 ```
 
@@ -290,10 +290,10 @@ const result = await sdk.rechargeInternet({
 ```javascript
 const result = await sdk.rechargeGame({
   encrypted_sk: 'USER_ENCRYPTED_SECRET_KEY',
-  operator:     'freefire', // e.g., 'freefire', 'pubg'
+  operator:     'freefire',   // e.g., 'freefire', 'pubg'
   playerId:     '123456789',
-  amount:       '500',
-  offer:        'diamonds'  // Offer type from getProducts()
+  amount:       '500',        // 'amount' from getProducts()
+  offer:        'diamonds'    // 'name' from getProducts()
 });
 ```
 
@@ -310,12 +310,18 @@ const result = await sdk.payBill({
 
 ### Get Available Products
 
+Fetches the list of available services, operators, and their associated offers (products).
+
 ```javascript
 const products = await sdk.getProducts();
 if (products.success) {
+  // Use products.data to populate Missions 'offer' and 'amount'
   console.log('Available services:', products.data);
 }
 ```
+
+> [!TIP]
+> Each product in the `data` array usually contains `name` and `amount`. When calling recharge methods, use the product's `name` for the `offer` field and the product's `amount` for the `amount` field.
 
 ### Operation History & Details
 
