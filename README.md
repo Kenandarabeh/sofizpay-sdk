@@ -362,8 +362,13 @@ if (result.success) {
 
 ### Check CIB Status
 
+To monitor the progress of a CIB/Dahabia payment, use the `cib_transaction_id` (also referred to as `order_number`) returned in the `data` of the `makeCIBTransaction` response.
+
 ```javascript
-const status = await sdk.checkCIBStatus('ORDER_NUMBER');
+// result is the object from makeCIBTransaction()
+const cibId = result.data.cib_transaction_id;
+
+const status = await sdk.checkCIBStatus(cibId);
 if (status.success) {
   console.log('Payment status:', status.data.status);
 }
