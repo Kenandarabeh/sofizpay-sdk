@@ -1,8 +1,5 @@
 <div align="center">
   <img src="https://github.com/kenandarabeh/sofizpay-sdk/blob/main/assets/sofizpay-logo.png?raw=true" alt="SofizPay Logo" width="200" />
-</div>
-
-# SofizPay SDK JS
 
   <h2>SofizPay JavaScript SDK</h2>
   <p><strong>The official JavaScript/TypeScript SDK for secure digital payments on the SofizPay platform.</strong></p>
@@ -58,73 +55,22 @@ yarn add sofizpay-sdk-js
 
 ### Browser (CDN)
 
+Load the following scripts in order before the SDK:
+
 ```html
 <script src="https://unpkg.com/stellar-sdk@12.3.0/dist/stellar-sdk.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
 <script src="https://unpkg.com/axios@1.10.0/dist/axios.min.js"></script>
 <script src="https://unpkg.com/sofizpay-sdk-js@latest/dist/sofizpay-sdk.umd.js"></script>
-
-<script>
-const sdk = new SofizPaySDK();
-
-async function sendPayment() {
-  const result = await sdk.submit({
-    secretkey: 'YOUR_SECRET_KEY',
-    destinationPublicKey: 'DESTINATION_KEY',
-    amount: 50,
-    memo: 'Web payment'
-  });
-  
-  alert(result.success ? 'Success!' : result.error);
-}
-</script>
 ```
 
-### React
+---
 
-```jsx
-import { useState, useEffect } from 'react';
-import SofizPaySDK from 'sofizpay-sdk-js';
-
-function WalletComponent() {
-  const [sdk] = useState(() => new SofizPaySDK());
-  const [balance, setBalance] = useState(0);
-
-  useEffect(() => {
-    const loadBalance = async () => {
-      const result = await sdk.getBalance('YOUR_PUBLIC_KEY');
-      if (result.success) setBalance(result.balance);
-    };
-    loadBalance();
-  }, []);
-
-  const sendPayment = async () => {
-    const result = await sdk.submit({
-      secretkey: 'YOUR_SECRET_KEY',
-      destinationPublicKey: 'RECIPIENT_KEY',
-      amount: 25,
-      memo: 'React payment'
-    });
-    
-    if (result.success) {
-      alert('Payment sent successfully!');
-      // Reload balance
-    }
-  };
-
-  return (
-    <div>
-      <h2>Balance: {balance}</h2>
-      <button onClick={sendPayment}>Send Payment</button>
-    </div>
-  );
-}
-```
-
-### Node.js
+## 🚀 Quick Start
 
 ```javascript
 import SofizPaySDK from 'sofizpay-sdk-js';
+
 const sdk = new SofizPaySDK();
 
 // 1. Check DZT balance
@@ -246,7 +192,7 @@ Derives the Stellar public key from a secret key without making any network call
 ```javascript
 const result = await sdk.getPublicKey('SXXX...YOUR_SECRET_KEY');
 if (result.success) {
-  window.location.href = result.data.payment_url;
+  console.log('Public key:', result.publicKey);
 }
 ```
 
@@ -489,7 +435,7 @@ app.post('/webhook/sofizpay', express.json(), (req, res) => {
 });
 ```
 
-## Response Format
+---
 
 ## 📤 Response Format
 

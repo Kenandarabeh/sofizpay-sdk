@@ -920,7 +920,7 @@ class SofizPaySDK {
     }
 
     try {
-      const baseUrl = 'https:www.sofizpay.com/make-cib-transaction/';
+      const baseUrl = 'https://www.sofizpay.com/make-cib-transaction/';
       const params = new URLSearchParams();
       
       params.append('account', transactionData.account);
@@ -978,7 +978,164 @@ class SofizPaySDK {
     }
   }
 
-verifySignature(verificationData) {
+  /**
+   * Phone recharge service
+   * @param {Object} data - Recharge data (encrypted_sk, phone, operator, amount, offer)
+   */
+  async rechargePhone(data) {
+    return this._performServiceOperation(data);
+  }
+
+  /**
+   * Internet recharge service
+   * @param {Object} data - Recharge data (encrypted_sk, phone, operator, amount, offer)
+   */
+  async rechargeInternet(data) {
+    return this._performServiceOperation(data);
+  }
+
+  /**
+   * Game recharge service
+   * @param {Object} data - Recharge data (encrypted_sk, operator, playerId, amount, offer)
+   */
+  async rechargeGame(data) {
+    return this._performServiceOperation(data);
+  }
+
+  /**
+   * Bill payment service
+   * @param {Object} data - Bill data (encrypted_sk, operator, and utility specific fields)
+   */
+  async payBill(data) {
+    return this._performServiceOperation(data);
+  }
+
+  /**
+   * Internal helper for service operations
+   * @private
+   */
+  async _performServiceOperation(data) {
+    try {
+      const response = await axios.post('https://www.sofizpay.com/services/operation_post', data, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      return {
+        success: true,
+        data: response.data,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return this._handleAxiosError(error);
+    }
+  }
+
+  /**
+   * Get details of a specific operation
+   * @param {string} operationId 
+   * @param {string} encryptedSecretKey 
+   */
+  async getOperationDetails(operationId, encryptedSecretKey) {
+    try {
+      const response = await axios.get(`https://www.sofizpay.com/operation-details/${operationId}/`, {
+        params: { encrypted_sk: encryptedSecretKey }
+      });
+      return {
+        success: true,
+        data: response.data,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return this._handleAxiosError(error);
+    }
+  }
+
+  /**
+   * Get operation history
+   * @param {string} encryptedSecretKey 
+   * @param {number} limit 
+   * @param {number} offset 
+   */
+  async getOperationHistory(encryptedSecretKey, limit = 10, offset = 0) {
+    try {
+      const response = await axios.get('https://sofizpay.com/services/operation-history/', {
+        params: {
+          encrypted_sk: encryptedSecretKey,
+          limit,
+          offset
+        }
+      });
+      return {
+        success: true,
+        data: response.data,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return this._handleAxiosError(error);
+    }
+  }
+
+  /**
+   * Get available products/services
+   * @param {string} encryptedSecretKey - Optional encrypted secret key
+   */
+  async getProducts(encryptedSecretKey) {
+    try {
+      const response = await axios.get('https://sofizpay.com/services/get_products/', {
+        data: { encrypted_sk: encryptedSecretKey },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+      return {
+        success: true,
+        data: response.data,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return this._handleAxiosError(error);
+    }
+  }
+
+  /**
+   * Check status of a CIB transaction (Sandbox/Prod)
+   * @param {string} orderNumber 
+   */
+  async checkCIBStatus(cibTransactionId) {
+    try {
+      const response = await axios.get('https://www.sofizpay.com/cib-transaction-check/', {
+        params: { order_number: cibTransactionId }
+      });
+      return {
+        success: true,
+        data: response.data,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return this._handleAxiosError(error);
+    }
+  }
+
+  /**
+   * Internal helper for handling axios errors
+   * @private
+   */
+  _handleAxiosError(error) {
+    let errorMessage = error.message;
+    if (error.response) {
+      errorMessage = `HTTP Error: ${error.response.status} - ${error.response.statusText}`;
+      if (error.response.data && error.response.data.error) {
+        errorMessage += ` - ${error.response.data.error}`;
+      }
+    }
+    return {
+      success: false,
+      error: errorMessage,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  verifySignature(verificationData) {
     if (!verificationData.message) {
       return false;
     }
