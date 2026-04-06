@@ -243,8 +243,8 @@ if (tx.success && tx.found) {
 | `checkCIBStatus(orderNumber)` | `string` | `ServiceResult` | Check CIB order status |
 | `rechargePhone(data)` | `{encrypted_sk, phone, operator, amount, offer}` | `ServiceResult` | Phone recharge |
 | `rechargeInternet(data)` | `{encrypted_sk, phone, amount, offer}` | `ServiceResult` | Internet recharge |
-| `rechargeGame(data)` | `{encrypted_sk, game, player_id, amount}` | `ServiceResult` | Game top-up |
-| `payBill(data)` | `{encrypted_sk, ...}` | `ServiceResult` | Bill payment |
+| `rechargeGame(data)` | `{encrypted_sk, operator, playerId, amount, offer}` | `ServiceResult` | Game top-up |
+| `payBill(data)` | `{encrypted_sk, operator, bill_id, amount}` | `ServiceResult` | Bill payment |
 | `getProducts(encSk?)` | `string?` | `ServiceResult` | List available products |
 | `getOperationHistory(encSk, limit, offset)` | `string, number, number` | `ServiceResult` | Mission history |
 | `getOperationDetails(id, encSk)` | `string, string` | `ServiceResult` | Single operation details |
@@ -279,8 +279,9 @@ if (result.success) {
 const result = await sdk.rechargeInternet({
   encrypted_sk: 'USER_ENCRYPTED_SECRET_KEY',
   phone:        '0661000000',
-  amount:       '200',
-  offer:        'idoom_1gb'
+  operator:     'idoom',   // e.g., 'idoom'
+  amount:       '2000',
+  offer:        'adsl'     // Offer type from getProducts()
 });
 ```
 
@@ -289,9 +290,10 @@ const result = await sdk.rechargeInternet({
 ```javascript
 const result = await sdk.rechargeGame({
   encrypted_sk: 'USER_ENCRYPTED_SECRET_KEY',
-  game:         'freefire',
-  player_id:    '123456789',
-  amount:       '500'
+  operator:     'freefire', // e.g., 'freefire', 'pubg'
+  playerId:     '123456789',
+  amount:       '500',
+  offer:        'diamonds'  // Offer type from getProducts()
 });
 ```
 
@@ -300,8 +302,8 @@ const result = await sdk.rechargeGame({
 ```javascript
 const result = await sdk.payBill({
   encrypted_sk: 'USER_ENCRYPTED_SECRET_KEY',
-  bill_type:    'electricity',
-  reference:    'REF123456',
+  operator:     'sonelgaz', // e.g., 'sonelgaz', 'ade'
+  bill_id:      'BILL_999',
   amount:       '1500'
 });
 ```
