@@ -262,8 +262,8 @@ const result = await sdk.rechargePhone({
   encrypted_sk: 'USER_ENCRYPTED_SECRET_KEY',
   phone:        '0661000000',
   operator:     'Mobilis',    // 'Mobilis' | 'Djezzy' | 'Ooredoo'
-  amount:       '100',        // 'amount' from getProducts()
-  offer:        'Top'         // 'name' from getProducts()
+  amount:       '100',
+  offer:        'Top'         // e.g., 'Top', 'Pix', etc.
 });
 
 if (result.success) {
@@ -280,8 +280,8 @@ const result = await sdk.rechargeInternet({
   encrypted_sk: 'USER_ENCRYPTED_SECRET_KEY',
   phone:        '0661000000',
   operator:     'idoom',     // e.g., 'idoom'
-  amount:       '2000',      // 'amount' from getProducts()
-  offer:        'adsl'       // 'name' from getProducts()
+  amount:       '2000',
+  offer:        'adsl'       // e.g., 'adsl', '4g', etc.
 });
 ```
 
