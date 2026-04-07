@@ -362,7 +362,7 @@ if (result.success) {
 
 ### Check CIB Status
 
-To monitor the progress of a CIB/Dahabia payment, use the `cib_transaction_id` (also referred to as `order_number`) returned in the `data` of the `makeCIBTransaction` response.
+To monitor the progress of a CIB/Dahabia payment, use the `cib_transaction_id` returned in the `data` of the `makeCIBTransaction` response.
 
 ```javascript
 // result is the object from makeCIBTransaction()
@@ -371,6 +371,36 @@ const cibId = result.data.cib_transaction_id;
 const status = await sdk.checkCIBStatus(cibId);
 if (status.success) {
   console.log('Payment status:', status.data.status);
+}
+```
+
+### 💡 Best Practice: Secure Order Flow
+
+For maximum security, never expose the `cib_transaction_id` (order_number) to the client-side. Always store it in your database and verify the status server-side.
+
+```javascript
+// 1. Merchant backend starts transaction
+const result = await sdk.makeCIBTransaction({
+  account: 'YOUR_PUBLIC_KEY',
+  amount:  5000,
+  memo:    'Order #9921'
+});
+
+if (result.success) {
+  const cibId = result.data.cib_transaction_id;
+  // ✅ SAVE to database linked to Order #9921
+  await db.orders.update({ id: 9921 }, { cib_transaction_id: cibId });
+  
+  // Send user to payment URL
+  const url = result.data.payment_url;
+}
+
+// 2. Later, when checking status, fetch from database
+const order = await db.orders.findOne({ id: 9921 });
+const status = await sdk.checkCIBStatus(order.cib_transaction_id);
+
+if (status.success && status.data.status === 'success') {
+  // ✅ Mark order as PAID in your database
 }
 ```
 
