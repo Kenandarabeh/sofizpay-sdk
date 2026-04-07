@@ -576,7 +576,7 @@ class SofizPaySDK {
    */
   async getOperationDetails(operationId, encryptedSecretKey) {
     try {
-      const response = await axios.get(`https://www.sofizpay.com/operation-details/${operationId}/`, {
+      const response = await axios.get(`https://sofizpay.com/services/operation-detail/${operationId}/`, {
         params: { encrypted_sk: encryptedSecretKey }
       });
       return {
