@@ -3,8 +3,9 @@ import axios from 'axios';
 import forge from 'node-forge';
 
 class SofizPaySDK {
-  constructor() {
+  constructor(isSandbox = false) {
     this.version = '1.1.11';
+    this.isSandbox = isSandbox;
     this.activeStreams = new Map();
     this.transactionCallbacks = new Map();
     this.streamCloseFunctions = new Map(); 
@@ -443,6 +444,19 @@ class SofizPaySDK {
   }
 
   async makeCIBTransaction(transactionData) {
+    return this._makeCIBRequest(transactionData, false);
+  }
+
+  /**
+   * Initiate a CIB transaction specifically in Sandbox mode.
+   * @param {Object} transactionData 
+   * @returns {Promise<Object>}
+   */
+  async makeSandboxCIBTransaction(transactionData) {
+    return this._makeCIBRequest(transactionData, true);
+  }
+
+  async _makeCIBRequest(transactionData, useSandbox) {
     if (!transactionData.account) {
       throw new Error('Account is required.');
     }
@@ -460,7 +474,9 @@ class SofizPaySDK {
     }
 
     try {
-      const baseUrl = 'https://www.sofizpay.com/make-cib-transaction/';
+      const baseUrl = useSandbox 
+        ? 'https://sofizpay.com/sandbox/make-cib-transaction/'
+        : 'https://www.sofizpay.com/make-cib-transaction/';
       const params = new URLSearchParams();
       
       params.append('account', transactionData.account);
@@ -642,8 +658,25 @@ class SofizPaySDK {
    * @param {string} orderNumber 
    */
   async checkCIBStatus(cibTransactionId) {
+    return this._checkCIBStatusRequest(cibTransactionId, false);
+  }
+
+  /**
+   * Check status of a CIB transaction specifically in Sandbox mode.
+   * @param {string} cibTransactionId 
+   * @returns {Promise<Object>}
+   */
+  async checkSandboxCIBStatus(cibTransactionId) {
+    return this._checkCIBStatusRequest(cibTransactionId, true);
+  }
+
+  async _checkCIBStatusRequest(cibTransactionId, useSandbox) {
     try {
-      const response = await axios.get('https://www.sofizpay.com/cib-transaction-check/', {
+      const baseUrl = useSandbox
+        ? 'https://sofizpay.com/sandbox/cib-transaction-check/'
+        : 'https://www.sofizpay.com/cib-transaction-check/';
+        
+      const response = await axios.get(baseUrl, {
         params: { order_number: cibTransactionId }
       });
       return {

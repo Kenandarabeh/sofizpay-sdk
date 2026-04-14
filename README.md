@@ -360,9 +360,33 @@ if (result.success) {
 }
 ```
 
-### Check CIB Status
+### 🧪 Sandbox Environment
 
-To monitor the progress of a CIB/Dahabia payment, use the `cib_transaction_id` returned in the `data` of the `makeCIBTransaction` response.
+For safe testing without real money, use the dedicated sandbox methods. These methods always point to the SofizPay Sandbox environment.
+
+```javascript
+// 1. Generate a sandbox payment link
+const result = await sdk.makeSandboxCIBTransaction({
+  account:   'YOUR_PUBLIC_KEY',
+  amount:    150.0,
+  full_name: 'Sandbox Tester',
+  phone:     '0555000000',
+  email:     'sandbox@example.com'
+});
+
+if (result.success) {
+  console.log('Sandbox URL:', result.url);
+  const cibId = result.data.cib_transaction_id;
+
+  // 2. Check sandbox status
+  const status = await sdk.checkSandboxCIBStatus(cibId);
+  console.log('Sandbox Status:', status.data.status);
+}
+```
+
+### Check CIB Status (Production)
+
+To monitor the progress of a real CIB/Dahabia payment, use the `cib_transaction_id` returned in the `data` of the `makeCIBTransaction` response.
 
 ```javascript
 // result is the object from makeCIBTransaction()
