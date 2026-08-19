@@ -154,6 +154,7 @@ export interface CIBTransactionResult {
 export interface CIBCheckData {
   order_number?: string;
   orderNumber?: string;
+  cib_transaction_id?: string;
   order_id?: string;
   orderId?: string;
   is_sandbox?: boolean;
@@ -181,7 +182,7 @@ export interface ProductItem {
 }
 
 export interface GetProductsData {
-  encrypted_sk: string;
+  encrypted_sk?: string;
   search?: string;
 }
 
@@ -278,6 +279,13 @@ export interface OperationDetailsResult {
   timestamp: string;
 }
 
+export interface OperationHistoryResult {
+  success: boolean;
+  data?: any;
+  error?: string;
+  timestamp: string;
+}
+
 export interface SignatureVerificationData {
   message: string;
   signature_url_safe: string;
@@ -297,8 +305,9 @@ export interface SignatureVerificationResult {
 
 export default class SofizPaySDK {
   version: string;
+  isSandbox: boolean;
   
-  constructor();
+  constructor(isSandbox?: boolean);
   
   submit(data: SubmitData): Promise<TransactionResult>;
   
@@ -326,11 +335,19 @@ export default class SofizPaySDK {
   
   makeCIBTransaction(transactionData: CIBTransactionData): Promise<CIBTransactionResult>;
   
-  checkCIBTransaction(data: string | CIBCheckData): Promise<CIBCheckResult>;
+  makeSandboxCIBTransaction(transactionData: CIBTransactionData): Promise<CIBTransactionResult>;
   
-  cibTransactionCheck(data: string | CIBCheckData): Promise<CIBCheckResult>;
+  checkCIBTransaction(data: string | number | CIBCheckData): Promise<CIBCheckResult>;
+  
+  checkCIBStatus(cibTransactionId: string | number): Promise<CIBCheckResult>;
+  
+  checkSandboxCIBStatus(cibTransactionId: string | number): Promise<CIBCheckResult>;
+  
+  cibTransactionCheck(data: string | number | CIBCheckData): Promise<CIBCheckResult>;
   
   getProducts(options: string | GetProductsData): Promise<ProductsResult>;
+  
+  getOperationHistory(encryptedSecretKey: string, limit?: number, offset?: number): Promise<OperationHistoryResult>;
   
   executeServiceOperation(operationData: any): Promise<OperationPostResult>;
   

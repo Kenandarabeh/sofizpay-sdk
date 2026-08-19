@@ -1,18 +1,29 @@
 import * as StellarSdk from 'stellar-sdk';
 import axios from 'axios';
+import https from 'https';
 
 const server = new StellarSdk.Horizon.Server('https://horizon.stellar.org');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Use a dedicated Agent to keep TLS sockets alive efficiently without dropping them.
+// This skips the ~200ms SSL handshake overhead on every single API page fetch!
+const stellarHttpsAgent = new https.Agent({ keepAlive: true, keepAliveMsecs: 3000, maxSockets: 10 });
+
 const fetchWithRetry = async (url, retries = 3, delay = 1000) => {
   for (let i = 0; i < retries; i++) {
     try {
-      const response = await axios.get(url);
+      const response = await axios.get(url, {
+        httpsAgent: stellarHttpsAgent,
+        timeout: 10000 // 10s timeout
+      });
       return response.data;
     } catch (error) {
-      if (error.response && error.response.status === 429 && i < retries - 1) {
-        console.warn(`Retrying request... (${i + 1}/${retries})`);
+      const isRateLimit = error.response && error.response.status === 429;
+      const isNetworkError = !error.response; // e.g., ECONNRESET, ENOTFOUND, Timeout
+      
+      if ((isRateLimit || isNetworkError) && i < retries - 1) {
+        console.warn(`[Network/RateLimit] Retrying request... (${i + 1}/${retries})`);
         await sleep(delay);
       } else {
         throw error;
@@ -290,54 +301,100 @@ export const sendPayment = async (sourceKey, destinationPublicKey, amount, memo 
   }
 };
 
-export const getTransactions = async (publicKey, limit = 200,cursor = null) => {
-  try {
-    const query = await server.transactions()
-      .forAccount(publicKey)
-      .order('desc')
-      .limit(limit);
-
-    // إذا كان هناك cursor، استخدمه للبدء من تلك النقطة
-    if (cursor) {
-      query.cursor(cursor);
+// Helper: run promises in parallel with a concurrency limit and sleep between batches to avoid HTTP 429 and TLS drops
+const chunkAsync = async (items, chunkSize, asyncFn) => {
+  const results = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    const chunk = items.slice(i, i + chunkSize);
+    const chunkResults = await Promise.all(chunk.map(asyncFn));
+    results.push(...chunkResults);
+    // Be nice to the API - add a small delay between batches
+    if (i + chunkSize < items.length) {
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
+  }
+  return results;
+};
 
-    const transactions = await query.call();
+export const getTransactions = async (publicKey, limit = null, cursor = null) => {
+  const DZT_ISSUER = 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV';
+  const PAGE_SIZE = limit && limit < 200 ? limit : 200;
 
+  try {
+    const allFilteredTransactions = [];
+    let currentCursor = cursor || '';
+    let hasMore = true;
 
-    const filteredTransactions = [];
-    
-    for (const tx of transactions.records) {
-      try {
-        const operations = await server.operations()
-          .forTransaction(tx.id)
-          .call();
-        for (const op of operations.records) {
-          if (op.type === 'payment' && 
-              op.asset_code === 'DZT' && 
-              op.asset_issuer === 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV') {
-            
-            filteredTransactions.push({
-              id: tx.id,
-              hash: tx.hash,
-              created_at: tx.created_at,
-              memo: tx.memo || '',
-              amount: op.amount,
-              from: op.from,
-              to: op.to,
-              paging_token: tx.paging_token, // مهم: احصل على الـ token لكل معاملة
-              type: op.from === publicKey ? 'sent' : 'received',
-              asset_code: op.asset_code,
-              asset_issuer: op.asset_issuer
-            });
-          }
+    while (hasMore) {
+      // ── Comprehensive & Hyper-fast: fetch all OPERATIONS with transaction details in one go ──
+      const url = `https://horizon.stellar.org/accounts/${publicKey}/operations?limit=${PAGE_SIZE}&order=desc&join=transactions${currentCursor ? `&cursor=${currentCursor}` : ''}`;
+      
+      const response = await fetchWithRetry(url, 3, 500); 
+      const records = response._embedded.records;
+      
+      if (!records || records.length === 0) {
+        break;
+      }
+
+      for (const op of records) {
+        let txData = {
+          id: op.transaction_hash,
+          hash: op.transaction_hash,
+          created_at: op.created_at,
+          memo: op.transaction ? (op.transaction.memo || '') : '',
+          successful: op.transaction ? op.transaction.successful : true,
+          paging_token: op.paging_token,
+        };
+
+        // 1. Handle Payments (Direct & Path)
+        if ((op.type === 'payment' || op.type === 'path_payment_strict_receive' || op.type === 'path_payment_strict_send') && 
+            op.asset_code === 'DZT' && op.asset_issuer === DZT_ISSUER) {
+          
+          txData.type = op.from === publicKey ? 'sent' : 'received';
+          txData.amount = op.amount;
+          txData.from = op.from;
+          txData.to = op.to || op.destination;
+          txData.asset_code = op.asset_code;
+          txData.asset_issuer = op.asset_issuer;
+          txData.category = 'payment';
+          
+          allFilteredTransactions.push(txData);
         }
-      } catch (opError) {
-        console.error('Error fetching operations for transaction:', tx.id, opError);
+        // 2. Handle Trustline (DZT)
+        else if (op.type === 'change_trust' && op.asset_code === 'DZT' && op.asset_issuer === DZT_ISSUER) {
+          txData.type = 'trustline';
+          txData.category = 'setup';
+          txData.asset_code = op.asset_code;
+          txData.amount = '0'; // Trustlines don't transfer value
+          allFilteredTransactions.push(txData);
+        }
+        // 3. Handle Account Creation
+        else if (op.type === 'create_account' && op.account === publicKey) {
+          txData.type = 'account_created';
+          txData.category = 'setup';
+          txData.amount = op.starting_balance;
+          txData.from = op.funder || op.source_account;
+          txData.asset_code = 'XLM';
+          allFilteredTransactions.push(txData);
+        }
+
+        if (limit && allFilteredTransactions.length >= limit) {
+          hasMore = false;
+          break;
+        }
+      }
+
+      if (!hasMore) break;
+
+      if (records.length < PAGE_SIZE) {
+        hasMore = false;
+      } else {
+        currentCursor = records[records.length - 1].paging_token;
       }
     }
-    
-    return filteredTransactions;
+
+    return allFilteredTransactions;
+
   } catch (error) {
     console.error('Error fetching transactions:', error);
     throw error;

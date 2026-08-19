@@ -3,8 +3,13 @@ import axios from 'axios';
 import forge from 'node-forge';
 
 class SofizPaySDK {
-  constructor() {
+  /**
+   * Initialize SofizPay SDK
+   * @param {boolean} [isSandbox=false] - Default to sandbox environment if true
+   */
+  constructor(isSandbox = false) {
     this.version = '1.2.0';
+    this.isSandbox = Boolean(isSandbox);
     this.activeStreams = new Map();
     this.transactionCallbacks = new Map();
     this.streamCloseFunctions = new Map(); 
@@ -453,7 +458,7 @@ class SofizPaySDK {
    * @param {string} [transactionData.invoice_id] - Optional linked invoice ID
    * @param {string} [transactionData.language] - Language for payment gateway ('ar' | 'en' | 'fr')
    * @param {string} [transactionData.memo] - Payment note (truncated to 28 bytes)
-   * @param {string} [transactionData.redirect] - 'yes' | 'no'
+   * @param {string|boolean} [transactionData.redirect] - 'yes' | 'no'
    * @param {string|boolean} [transactionData.keep_return_url] - 'True' | 'False'
    * @param {boolean} [transactionData.is_sandbox] - Whether to use the Sandbox environment
    * @param {boolean} [transactionData.isSandbox] - Alias for is_sandbox
@@ -479,7 +484,12 @@ class SofizPaySDK {
     }
 
     try {
-      const isSandbox = Boolean(transactionData.is_sandbox || transactionData.isSandbox);
+      const isSandbox = Boolean(
+        transactionData.is_sandbox !== undefined ? transactionData.is_sandbox :
+        transactionData.isSandbox !== undefined ? transactionData.isSandbox :
+        this.isSandbox
+      );
+
       const baseUrl = isSandbox 
         ? 'https://sofizpay.com/sandbox/make-cib-transaction/' 
         : 'https://sofizpay.com/make-cib-transaction/';
@@ -577,22 +587,36 @@ class SofizPaySDK {
   }
 
   /**
-   * Check CIB transaction status by order number
+   * Dedicated method to initiate a CIB transaction specifically in Sandbox mode.
+   * @param {Object} transactionData 
+   * @returns {Promise<Object>}
+   */
+  async makeSandboxCIBTransaction(transactionData) {
+    return this.makeCIBTransaction({
+      ...transactionData,
+      is_sandbox: true
+    });
+  }
+
+  /**
+   * Check CIB transaction status by order number / CIB transaction ID
    * @param {string|Object} data - Order number string or options object
-   * @param {string} [data.order_number] - CIB order number
+   * @param {string} [data.order_number] - CIB order number or ID
    * @param {string} [data.orderNumber] - Alias for order_number
+   * @param {string} [data.cib_transaction_id] - Alias for order_number
    * @param {boolean} [data.is_sandbox] - Use sandbox check endpoint
    * @param {boolean} [data.isSandbox] - Alias for is_sandbox
    */
   async checkCIBTransaction(data) {
     let orderNumber = null;
-    let isSandbox = false;
+    let isSandbox = this.isSandbox;
 
-    if (typeof data === 'string') {
-      orderNumber = data;
+    if (typeof data === 'string' || typeof data === 'number') {
+      orderNumber = data.toString();
     } else if (data && typeof data === 'object') {
-      orderNumber = data.order_number || data.orderNumber || data.order_id || data.orderId;
-      isSandbox = Boolean(data.is_sandbox || data.isSandbox);
+      orderNumber = data.order_number || data.orderNumber || data.cib_transaction_id || data.order_id || data.orderId;
+      if (data.is_sandbox !== undefined) isSandbox = Boolean(data.is_sandbox);
+      else if (data.isSandbox !== undefined) isSandbox = Boolean(data.isSandbox);
     }
 
     if (!orderNumber) {
@@ -649,6 +673,29 @@ class SofizPaySDK {
   }
 
   /**
+   * Check status of a CIB transaction (Production / Default mode)
+   * @param {string} cibTransactionId 
+   */
+  async checkCIBStatus(cibTransactionId) {
+    return this.checkCIBTransaction({
+      order_number: cibTransactionId,
+      is_sandbox: false
+    });
+  }
+
+  /**
+   * Check status of a CIB transaction specifically in Sandbox mode.
+   * @param {string} cibTransactionId 
+   * @returns {Promise<Object>}
+   */
+  async checkSandboxCIBStatus(cibTransactionId) {
+    return this.checkCIBTransaction({
+      order_number: cibTransactionId,
+      is_sandbox: true
+    });
+  }
+
+  /**
    * Alias for checkCIBTransaction
    */
   async cibTransactionCheck(data) {
@@ -658,7 +705,7 @@ class SofizPaySDK {
   /**
    * Retrieve catalog of available products and services
    * @param {string|Object} options - Encrypted secret key string or options object
-   * @param {string} options.encrypted_sk - Encrypted or plain Stellar secret key (starts with 'S')
+   * @param {string} [options.encrypted_sk] - Encrypted or plain Stellar secret key (starts with 'S')
    * @param {string} [options.search] - Optional search filter keyword
    */
   async getProducts(options) {
@@ -685,7 +732,6 @@ class SofizPaySDK {
         payload.search = search;
       }
 
-      // Supports sending payload in both body & params for server compatibility
       const response = await axios({
         method: 'POST',
         url: url,
@@ -694,8 +740,7 @@ class SofizPaySDK {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         }
-      }).catch(async (postError) => {
-        // Fallback to GET with params or data if POST fails
+      }).catch(async () => {
         return await axios.get(url, {
           params: payload,
           data: payload,
@@ -718,18 +763,35 @@ class SofizPaySDK {
       };
     } catch (error) {
       console.error('Error fetching products:', error);
-      let errorMessage = error.message;
+      return this._handleAxiosError(error);
+    }
+  }
 
-      if (error.response?.data?.message || error.response?.data?.error) {
-        errorMessage = error.response.data.message || error.response.data.error;
-      }
-
+  /**
+   * Get operation history
+   * @param {string} encryptedSecretKey 
+   * @param {number} limit 
+   * @param {number} offset 
+   */
+  async getOperationHistory(encryptedSecretKey, limit = 10, offset = 0) {
+    if (!encryptedSecretKey) {
+      throw new Error('encryptedSecretKey is required.');
+    }
+    try {
+      const response = await axios.get('https://sofizpay.com/services/operation-history/', {
+        params: {
+          encrypted_sk: encryptedSecretKey,
+          limit,
+          offset
+        }
+      });
       return {
-        success: false,
-        error: errorMessage,
-        products: [],
+        success: true,
+        data: response.data,
         timestamp: new Date().toISOString()
       };
+    } catch (error) {
+      return this._handleAxiosError(error);
     }
   }
 
@@ -751,48 +813,38 @@ class SofizPaySDK {
       throw new Error('Valid amount is required.');
     }
 
+    return this._performServiceOperation(operationData);
+  }
+
+  /**
+   * Internal helper for service operations
+   * @private
+   */
+  async _performServiceOperation(data) {
     try {
       const url = 'https://sofizpay.com/services/operation_post';
-      const response = await axios.post(url, operationData, {
+      const response = await axios.post(url, data, {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         }
       });
 
-      const data = response.data;
-      const isSuccess = data?.status === 'success' || data?.transaction_status === 'confirmed';
+      const responseData = response.data;
+      const isSuccess = responseData?.status === 'success' || responseData?.transaction_status === 'confirmed';
 
       return {
         success: isSuccess,
-        status: data?.status || (isSuccess ? 'success' : 'failed'),
-        message: data?.message || null,
-        operation_id: data?.operation_id || null,
-        transaction_id: data?.transaction_id || null,
-        transaction_status: data?.transaction_status || null,
-        data: data,
+        status: responseData?.status || (isSuccess ? 'success' : 'failed'),
+        message: responseData?.message || null,
+        operation_id: responseData?.operation_id || null,
+        transaction_id: responseData?.transaction_id || null,
+        transaction_status: responseData?.transaction_status || null,
+        data: responseData,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      console.error('Error executing service operation:', error);
-      let errorMessage = error.message;
-      let errorData = null;
-
-      if (error.response) {
-        errorData = error.response.data;
-        if (error.response.data && (error.response.data.message || error.response.data.error)) {
-          errorMessage = error.response.data.message || error.response.data.error;
-        } else {
-          errorMessage = `HTTP Error: ${error.response.status} - ${error.response.statusText}`;
-        }
-      }
-
-      return {
-        success: false,
-        error: errorMessage,
-        errorData: errorData,
-        timestamp: new Date().toISOString()
-      };
+      return this._handleAxiosError(error);
     }
   }
 
@@ -845,7 +897,6 @@ class SofizPaySDK {
       if (billData.phone) payload.phone = billData.phone;
       if (billData.bill) payload.bill = billData.bill;
     } else {
-      // Pass any additional fields
       Object.assign(payload, billData);
     }
 
@@ -968,8 +1019,8 @@ class SofizPaySDK {
   /**
    * Retrieve operation details by operation UUID
    * @param {string|Object} options - Operation UUID or options object
-   * @param {string} options.operation_id - Unique UUID of operation
-   * @param {string} options.encrypted_sk - Encrypted or plain secret key
+   * @param {string} [options.operation_id] - Unique UUID of operation
+   * @param {string} [options.encrypted_sk] - Encrypted or plain secret key
    */
   async getOperationDetails(options, secretKeyParam = null) {
     let operation_id = null;
@@ -991,8 +1042,9 @@ class SofizPaySDK {
     }
 
     try {
-      const url = `https://sofizpay.com/operation-details/${operation_id}/?encrypted_sk=${encodeURIComponent(encrypted_sk)}`;
+      const url = `https://sofizpay.com/services/operation-detail/${operation_id}/`;
       const response = await axios.get(url, {
+        params: { encrypted_sk: encrypted_sk },
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
@@ -1007,19 +1059,35 @@ class SofizPaySDK {
       };
     } catch (error) {
       console.error('Error fetching operation details:', error);
-      let errorMessage = error.message;
-
-      if (error.response?.data?.message || error.response?.data?.error) {
-        errorMessage = error.response.data.message || error.response.data.error;
-      }
-
-      return {
-        success: false,
-        error: errorMessage,
-        operation_id: operation_id,
-        timestamp: new Date().toISOString()
-      };
+      return this._handleAxiosError(error);
     }
+  }
+
+  /**
+   * Internal helper for handling axios errors
+   * @private
+   */
+  _handleAxiosError(error) {
+    let errorMessage = error.message;
+    let errorData = null;
+
+    if (error.response) {
+      errorData = error.response.data;
+      if (error.response.data && (error.response.data.message || error.response.data.error)) {
+        errorMessage = error.response.data.message || error.response.data.error;
+      } else {
+        errorMessage = `HTTP Error: ${error.response.status} - ${error.response.statusText}`;
+      }
+    } else if (error.request) {
+      errorMessage = 'Network error: No response received from server';
+    }
+
+    return {
+      success: false,
+      error: errorMessage,
+      errorData: errorData,
+      timestamp: new Date().toISOString()
+    };
   }
 
   verifySignature(verificationData) {

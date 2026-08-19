@@ -1,8 +1,8 @@
 (function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('stellar-sdk'), require('axios'), require('node-forge')) :
-  typeof define === 'function' && define.amd ? define(['stellar-sdk', 'axios', 'node-forge'], factory) :
-  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.SofizPaySDK = factory(global.StellarSdk, global.axios, global.forge));
-})(this, (function (StellarSdk, axios, forge) { 'use strict';
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('stellar-sdk'), require('axios'), require('https'), require('node-forge')) :
+  typeof define === 'function' && define.amd ? define(['stellar-sdk', 'axios', 'https', 'node-forge'], factory) :
+  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.SofizPaySDK = factory(global.StellarSdk, global.axios, global.https, global.forge));
+})(this, (function (StellarSdk, axios, https, forge) { 'use strict';
 
   function _interopNamespaceDefault(e) {
     var n = Object.create(null);
@@ -27,14 +27,24 @@
 
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+  // Use a dedicated Agent to keep TLS sockets alive efficiently without dropping them.
+  // This skips the ~200ms SSL handshake overhead on every single API page fetch!
+  const stellarHttpsAgent = new https.Agent({ keepAlive: true, keepAliveMsecs: 3000, maxSockets: 10 });
+
   const fetchWithRetry = async (url, retries = 3, delay = 1000) => {
     for (let i = 0; i < retries; i++) {
       try {
-        const response = await axios.get(url);
+        const response = await axios.get(url, {
+          httpsAgent: stellarHttpsAgent,
+          timeout: 10000 // 10s timeout
+        });
         return response.data;
       } catch (error) {
-        if (error.response && error.response.status === 429 && i < retries - 1) {
-          console.warn(`Retrying request... (${i + 1}/${retries})`);
+        const isRateLimit = error.response && error.response.status === 429;
+        const isNetworkError = !error.response; // e.g., ECONNRESET, ENOTFOUND, Timeout
+        
+        if ((isRateLimit || isNetworkError) && i < retries - 1) {
+          console.warn(`[Network/RateLimit] Retrying request... (${i + 1}/${retries})`);
           await sleep(delay);
         } else {
           throw error;
@@ -312,54 +322,85 @@
     }
   };
 
-  const getTransactions = async (publicKey, limit = 200,cursor = null) => {
+  const getTransactions = async (publicKey, limit = null, cursor = null) => {
+    const DZT_ISSUER = 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV';
+    const PAGE_SIZE = limit && limit < 200 ? limit : 200;
+
     try {
-      const query = await server.transactions()
-        .forAccount(publicKey)
-        .order('desc')
-        .limit(limit);
+      const allFilteredTransactions = [];
+      let currentCursor = cursor || '';
+      let hasMore = true;
 
-      // إذا كان هناك cursor، استخدمه للبدء من تلك النقطة
-      if (cursor) {
-        query.cursor(cursor);
-      }
+      while (hasMore) {
+        // ── Comprehensive & Hyper-fast: fetch all OPERATIONS with transaction details in one go ──
+        const url = `https://horizon.stellar.org/accounts/${publicKey}/operations?limit=${PAGE_SIZE}&order=desc&join=transactions${currentCursor ? `&cursor=${currentCursor}` : ''}`;
+        
+        const response = await fetchWithRetry(url, 3, 500); 
+        const records = response._embedded.records;
+        
+        if (!records || records.length === 0) {
+          break;
+        }
 
-      const transactions = await query.call();
+        for (const op of records) {
+          let txData = {
+            id: op.transaction_hash,
+            hash: op.transaction_hash,
+            created_at: op.created_at,
+            memo: op.transaction ? (op.transaction.memo || '') : '',
+            successful: op.transaction ? op.transaction.successful : true,
+            paging_token: op.paging_token,
+          };
 
-
-      const filteredTransactions = [];
-      
-      for (const tx of transactions.records) {
-        try {
-          const operations = await server.operations()
-            .forTransaction(tx.id)
-            .call();
-          for (const op of operations.records) {
-            if (op.type === 'payment' && 
-                op.asset_code === 'DZT' && 
-                op.asset_issuer === 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV') {
-              
-              filteredTransactions.push({
-                id: tx.id,
-                hash: tx.hash,
-                created_at: tx.created_at,
-                memo: tx.memo || '',
-                amount: op.amount,
-                from: op.from,
-                to: op.to,
-                paging_token: tx.paging_token, // مهم: احصل على الـ token لكل معاملة
-                type: op.from === publicKey ? 'sent' : 'received',
-                asset_code: op.asset_code,
-                asset_issuer: op.asset_issuer
-              });
-            }
+          // 1. Handle Payments (Direct & Path)
+          if ((op.type === 'payment' || op.type === 'path_payment_strict_receive' || op.type === 'path_payment_strict_send') && 
+              op.asset_code === 'DZT' && op.asset_issuer === DZT_ISSUER) {
+            
+            txData.type = op.from === publicKey ? 'sent' : 'received';
+            txData.amount = op.amount;
+            txData.from = op.from;
+            txData.to = op.to || op.destination;
+            txData.asset_code = op.asset_code;
+            txData.asset_issuer = op.asset_issuer;
+            txData.category = 'payment';
+            
+            allFilteredTransactions.push(txData);
           }
-        } catch (opError) {
-          console.error('Error fetching operations for transaction:', tx.id, opError);
+          // 2. Handle Trustline (DZT)
+          else if (op.type === 'change_trust' && op.asset_code === 'DZT' && op.asset_issuer === DZT_ISSUER) {
+            txData.type = 'trustline';
+            txData.category = 'setup';
+            txData.asset_code = op.asset_code;
+            txData.amount = '0'; // Trustlines don't transfer value
+            allFilteredTransactions.push(txData);
+          }
+          // 3. Handle Account Creation
+          else if (op.type === 'create_account' && op.account === publicKey) {
+            txData.type = 'account_created';
+            txData.category = 'setup';
+            txData.amount = op.starting_balance;
+            txData.from = op.funder || op.source_account;
+            txData.asset_code = 'XLM';
+            allFilteredTransactions.push(txData);
+          }
+
+          if (limit && allFilteredTransactions.length >= limit) {
+            hasMore = false;
+            break;
+          }
+        }
+
+        if (!hasMore) break;
+
+        if (records.length < PAGE_SIZE) {
+          hasMore = false;
+        } else {
+          currentCursor = records[records.length - 1].paging_token;
         }
       }
-      
-      return filteredTransactions;
+
+      return allFilteredTransactions;
+
     } catch (error) {
       console.error('Error fetching transactions:', error);
       throw error;
@@ -484,8 +525,13 @@
   };
 
   class SofizPaySDK {
-    constructor() {
+    /**
+     * Initialize SofizPay SDK
+     * @param {boolean} [isSandbox=false] - Default to sandbox environment if true
+     */
+    constructor(isSandbox = false) {
       this.version = '1.2.0';
+      this.isSandbox = Boolean(isSandbox);
       this.activeStreams = new Map();
       this.transactionCallbacks = new Map();
       this.streamCloseFunctions = new Map(); 
@@ -934,7 +980,7 @@
      * @param {string} [transactionData.invoice_id] - Optional linked invoice ID
      * @param {string} [transactionData.language] - Language for payment gateway ('ar' | 'en' | 'fr')
      * @param {string} [transactionData.memo] - Payment note (truncated to 28 bytes)
-     * @param {string} [transactionData.redirect] - 'yes' | 'no'
+     * @param {string|boolean} [transactionData.redirect] - 'yes' | 'no'
      * @param {string|boolean} [transactionData.keep_return_url] - 'True' | 'False'
      * @param {boolean} [transactionData.is_sandbox] - Whether to use the Sandbox environment
      * @param {boolean} [transactionData.isSandbox] - Alias for is_sandbox
@@ -960,7 +1006,12 @@
       }
 
       try {
-        const isSandbox = Boolean(transactionData.is_sandbox || transactionData.isSandbox);
+        const isSandbox = Boolean(
+          transactionData.is_sandbox !== undefined ? transactionData.is_sandbox :
+          transactionData.isSandbox !== undefined ? transactionData.isSandbox :
+          this.isSandbox
+        );
+
         const baseUrl = isSandbox 
           ? 'https://sofizpay.com/sandbox/make-cib-transaction/' 
           : 'https://sofizpay.com/make-cib-transaction/';
@@ -1058,22 +1109,36 @@
     }
 
     /**
-     * Check CIB transaction status by order number
+     * Dedicated method to initiate a CIB transaction specifically in Sandbox mode.
+     * @param {Object} transactionData 
+     * @returns {Promise<Object>}
+     */
+    async makeSandboxCIBTransaction(transactionData) {
+      return this.makeCIBTransaction({
+        ...transactionData,
+        is_sandbox: true
+      });
+    }
+
+    /**
+     * Check CIB transaction status by order number / CIB transaction ID
      * @param {string|Object} data - Order number string or options object
-     * @param {string} [data.order_number] - CIB order number
+     * @param {string} [data.order_number] - CIB order number or ID
      * @param {string} [data.orderNumber] - Alias for order_number
+     * @param {string} [data.cib_transaction_id] - Alias for order_number
      * @param {boolean} [data.is_sandbox] - Use sandbox check endpoint
      * @param {boolean} [data.isSandbox] - Alias for is_sandbox
      */
     async checkCIBTransaction(data) {
       let orderNumber = null;
-      let isSandbox = false;
+      let isSandbox = this.isSandbox;
 
-      if (typeof data === 'string') {
-        orderNumber = data;
+      if (typeof data === 'string' || typeof data === 'number') {
+        orderNumber = data.toString();
       } else if (data && typeof data === 'object') {
-        orderNumber = data.order_number || data.orderNumber || data.order_id || data.orderId;
-        isSandbox = Boolean(data.is_sandbox || data.isSandbox);
+        orderNumber = data.order_number || data.orderNumber || data.cib_transaction_id || data.order_id || data.orderId;
+        if (data.is_sandbox !== undefined) isSandbox = Boolean(data.is_sandbox);
+        else if (data.isSandbox !== undefined) isSandbox = Boolean(data.isSandbox);
       }
 
       if (!orderNumber) {
@@ -1130,6 +1195,29 @@
     }
 
     /**
+     * Check status of a CIB transaction (Production / Default mode)
+     * @param {string} cibTransactionId 
+     */
+    async checkCIBStatus(cibTransactionId) {
+      return this.checkCIBTransaction({
+        order_number: cibTransactionId,
+        is_sandbox: false
+      });
+    }
+
+    /**
+     * Check status of a CIB transaction specifically in Sandbox mode.
+     * @param {string} cibTransactionId 
+     * @returns {Promise<Object>}
+     */
+    async checkSandboxCIBStatus(cibTransactionId) {
+      return this.checkCIBTransaction({
+        order_number: cibTransactionId,
+        is_sandbox: true
+      });
+    }
+
+    /**
      * Alias for checkCIBTransaction
      */
     async cibTransactionCheck(data) {
@@ -1139,7 +1227,7 @@
     /**
      * Retrieve catalog of available products and services
      * @param {string|Object} options - Encrypted secret key string or options object
-     * @param {string} options.encrypted_sk - Encrypted or plain Stellar secret key (starts with 'S')
+     * @param {string} [options.encrypted_sk] - Encrypted or plain Stellar secret key (starts with 'S')
      * @param {string} [options.search] - Optional search filter keyword
      */
     async getProducts(options) {
@@ -1166,7 +1254,6 @@
           payload.search = search;
         }
 
-        // Supports sending payload in both body & params for server compatibility
         const response = await axios({
           method: 'POST',
           url: url,
@@ -1175,8 +1262,7 @@
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           }
-        }).catch(async (postError) => {
-          // Fallback to GET with params or data if POST fails
+        }).catch(async () => {
           return await axios.get(url, {
             params: payload,
             data: payload,
@@ -1199,18 +1285,35 @@
         };
       } catch (error) {
         console.error('Error fetching products:', error);
-        let errorMessage = error.message;
+        return this._handleAxiosError(error);
+      }
+    }
 
-        if (error.response?.data?.message || error.response?.data?.error) {
-          errorMessage = error.response.data.message || error.response.data.error;
-        }
-
+    /**
+     * Get operation history
+     * @param {string} encryptedSecretKey 
+     * @param {number} limit 
+     * @param {number} offset 
+     */
+    async getOperationHistory(encryptedSecretKey, limit = 10, offset = 0) {
+      if (!encryptedSecretKey) {
+        throw new Error('encryptedSecretKey is required.');
+      }
+      try {
+        const response = await axios.get('https://sofizpay.com/services/operation-history/', {
+          params: {
+            encrypted_sk: encryptedSecretKey,
+            limit,
+            offset
+          }
+        });
         return {
-          success: false,
-          error: errorMessage,
-          products: [],
+          success: true,
+          data: response.data,
           timestamp: new Date().toISOString()
         };
+      } catch (error) {
+        return this._handleAxiosError(error);
       }
     }
 
@@ -1232,48 +1335,38 @@
         throw new Error('Valid amount is required.');
       }
 
+      return this._performServiceOperation(operationData);
+    }
+
+    /**
+     * Internal helper for service operations
+     * @private
+     */
+    async _performServiceOperation(data) {
       try {
         const url = 'https://sofizpay.com/services/operation_post';
-        const response = await axios.post(url, operationData, {
+        const response = await axios.post(url, data, {
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           }
         });
 
-        const data = response.data;
-        const isSuccess = data?.status === 'success' || data?.transaction_status === 'confirmed';
+        const responseData = response.data;
+        const isSuccess = responseData?.status === 'success' || responseData?.transaction_status === 'confirmed';
 
         return {
           success: isSuccess,
-          status: data?.status || (isSuccess ? 'success' : 'failed'),
-          message: data?.message || null,
-          operation_id: data?.operation_id || null,
-          transaction_id: data?.transaction_id || null,
-          transaction_status: data?.transaction_status || null,
-          data: data,
+          status: responseData?.status || (isSuccess ? 'success' : 'failed'),
+          message: responseData?.message || null,
+          operation_id: responseData?.operation_id || null,
+          transaction_id: responseData?.transaction_id || null,
+          transaction_status: responseData?.transaction_status || null,
+          data: responseData,
           timestamp: new Date().toISOString()
         };
       } catch (error) {
-        console.error('Error executing service operation:', error);
-        let errorMessage = error.message;
-        let errorData = null;
-
-        if (error.response) {
-          errorData = error.response.data;
-          if (error.response.data && (error.response.data.message || error.response.data.error)) {
-            errorMessage = error.response.data.message || error.response.data.error;
-          } else {
-            errorMessage = `HTTP Error: ${error.response.status} - ${error.response.statusText}`;
-          }
-        }
-
-        return {
-          success: false,
-          error: errorMessage,
-          errorData: errorData,
-          timestamp: new Date().toISOString()
-        };
+        return this._handleAxiosError(error);
       }
     }
 
@@ -1326,7 +1419,6 @@
         if (billData.phone) payload.phone = billData.phone;
         if (billData.bill) payload.bill = billData.bill;
       } else {
-        // Pass any additional fields
         Object.assign(payload, billData);
       }
 
@@ -1449,8 +1541,8 @@
     /**
      * Retrieve operation details by operation UUID
      * @param {string|Object} options - Operation UUID or options object
-     * @param {string} options.operation_id - Unique UUID of operation
-     * @param {string} options.encrypted_sk - Encrypted or plain secret key
+     * @param {string} [options.operation_id] - Unique UUID of operation
+     * @param {string} [options.encrypted_sk] - Encrypted or plain secret key
      */
     async getOperationDetails(options, secretKeyParam = null) {
       let operation_id = null;
@@ -1472,8 +1564,9 @@
       }
 
       try {
-        const url = `https://sofizpay.com/operation-details/${operation_id}/?encrypted_sk=${encodeURIComponent(encrypted_sk)}`;
+        const url = `https://sofizpay.com/services/operation-detail/${operation_id}/`;
         const response = await axios.get(url, {
+          params: { encrypted_sk: encrypted_sk },
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'
@@ -1488,19 +1581,35 @@
         };
       } catch (error) {
         console.error('Error fetching operation details:', error);
-        let errorMessage = error.message;
-
-        if (error.response?.data?.message || error.response?.data?.error) {
-          errorMessage = error.response.data.message || error.response.data.error;
-        }
-
-        return {
-          success: false,
-          error: errorMessage,
-          operation_id: operation_id,
-          timestamp: new Date().toISOString()
-        };
+        return this._handleAxiosError(error);
       }
+    }
+
+    /**
+     * Internal helper for handling axios errors
+     * @private
+     */
+    _handleAxiosError(error) {
+      let errorMessage = error.message;
+      let errorData = null;
+
+      if (error.response) {
+        errorData = error.response.data;
+        if (error.response.data && (error.response.data.message || error.response.data.error)) {
+          errorMessage = error.response.data.message || error.response.data.error;
+        } else {
+          errorMessage = `HTTP Error: ${error.response.status} - ${error.response.statusText}`;
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error: No response received from server';
+      }
+
+      return {
+        success: false,
+        error: errorMessage,
+        errorData: errorData,
+        timestamp: new Date().toISOString()
+      };
     }
 
     verifySignature(verificationData) {

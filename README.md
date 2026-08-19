@@ -26,7 +26,11 @@ yarn add sofizpay-sdk-js
 ```javascript
 import SofizPaySDK from 'sofizpay-sdk-js';
 
+// Production mode (default)
 const sdk = new SofizPaySDK();
+
+// Or Sandbox mode for testing
+// const sdk = new SofizPaySDK(true);
 
 // Send direct wallet payment
 const result = await sdk.submit({
@@ -90,14 +94,27 @@ if (response.success) {
 }
 ```
 
+#### Dedicated Sandbox Helper:
+```javascript
+// Creates a CIB transaction directly in the Sandbox environment
+const sandboxRes = await sdk.makeSandboxCIBTransaction({
+  account: 'GDNS27ISCGOIJFXC6CM4O5SVHVJPSWR42QEBWUFF24N5VVHGW73ZSJNQ',
+  amount: 150.0,
+  full_name: 'Sandbox Tester',
+  phone: '0661000000',
+  email: 'sandbox@sofizpay.com',
+  memo: 'Node Sandbox Test'
+});
+```
+
 ---
 
-### 2. Check CIB Transaction Status (`checkCIBTransaction`)
+### 2. Check CIB Transaction Status (`checkCIBTransaction` / `checkCIBStatus`)
 
 Verify the payment status of an order after user completes payment on the SATIM page.
 
 ```javascript
-// Query by order number
+// Query by order number / CIB transaction ID
 const check = await sdk.checkCIBTransaction({
   order_number: '2517039448',
   is_sandbox: false // Set true if testing in sandbox
@@ -108,6 +125,15 @@ if (check.success && check.status === 'paid') {
 } else {
   console.log('Payment status:', check.status, check.errorMessage);
 }
+```
+
+#### Dedicated Status Check Helpers:
+```javascript
+// Check status in Production
+const prodStatus = await sdk.checkCIBStatus('2517039448');
+
+// Check status in Sandbox
+const sandboxStatus = await sdk.checkSandboxCIBStatus('40a11881d8764fe9a371');
 ```
 
 ---
@@ -218,17 +244,18 @@ const game = await sdk.rechargeGame({
 
 ---
 
-### 6. Operation Details Inquiry (`getOperationDetails`)
+### 6. Operation Details & History
 
 ```javascript
+// Get details of a specific operation
 const details = await sdk.getOperationDetails({
   operation_id: '550e8400-e29b-41d4-a716-446655440000',
   encrypted_sk: 'YOUR_SECRET_KEY'
 });
 
-if (details.success) {
-  console.log('Operation Details:', details.data);
-}
+// Get operation history
+const history = await sdk.getOperationHistory('YOUR_SECRET_KEY', 10, 0);
+console.log('Recent Operations:', history.data);
 ```
 
 ---
@@ -286,7 +313,7 @@ await sdk.stopTransactionStream('GDNS27ISCGOIJFXC6CM4O5SVHVJPSWR42QEBWUFF24N5VVH
 
 SofizPay provides a mock testing environment to test CIB / EDAHABIA payments without real cards:
 
-Set `is_sandbox: true` in `makeCIBTransaction` or `checkCIBTransaction`.
+Set `is_sandbox: true` in `makeCIBTransaction` or `checkCIBTransaction`, or initialize `new SofizPaySDK(true)`.
 
 ### Test Card Numbers:
 
