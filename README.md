@@ -4,17 +4,21 @@
 
 # SofizPay SDK JS
 
-**The official JavaScript SDK for secure digital payments and transactions.**
+**The official JavaScript SDK for secure digital payments, EDAHABIA / CIB transactions, utility bill payments, and telecom recharges in Algeria.**
 
-[![npm version](https://badge.fury.io/js/sofizpay-sdk-js.svg)](https://www.npmjs.com/package/sofizpay-sdk)
+[![npm version](https://badge.fury.io/js/sofizpay-sdk-js.svg)](https://www.npmjs.com/package/sofizpay-sdk-js)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Quick Start
+---
+
+## 🚀 Quick Start
 
 ### Installation
 
 ```bash
 npm install sofizpay-sdk-js
+# or
+yarn add sofizpay-sdk-js
 ```
 
 ### Basic Usage
@@ -24,7 +28,7 @@ import SofizPaySDK from 'sofizpay-sdk-js';
 
 const sdk = new SofizPaySDK();
 
-// Send payment
+// Send direct wallet payment
 const result = await sdk.submit({
   secretkey: 'YOUR_SECRET_KEY',
   destinationPublicKey: 'RECIPIENT_PUBLIC_KEY',
@@ -35,420 +39,280 @@ const result = await sdk.submit({
 console.log(result.success ? 'Payment sent!' : result.error);
 ```
 
-## Features
-
-- ✅ **Send Secure Payments** - Instant digital transactions
-- ✅ **Get Account Balance** - Real-time balance checking
-- ✅ **Transaction History** - Complete transaction records
-- ✅ **Search & Filter** - Find transactions by memo or hash
-- ✅ **Real-time Streaming** - Live transaction notifications with flexible options
-- ✅ **Multi-platform** - Works everywhere (Browser, Node.js, React, Vue)
-- ✅ **Flexible Monitoring** - Stream from now or with full history, customizable intervals
-
-## Usage Examples
-
-### Browser (CDN)
-
-```html
-<script src="https://unpkg.com/stellar-sdk@12.3.0/dist/stellar-sdk.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
-<script src="https://unpkg.com/axios@1.10.0/dist/axios.min.js"></script>
-<script src="https://unpkg.com/sofizpay-sdk-js@latest/dist/sofizpay-sdk.umd.js"></script>
-
-<script>
-const sdk = new SofizPaySDK();
-
-async function sendPayment() {
-  const result = await sdk.submit({
-    secretkey: 'YOUR_SECRET_KEY',
-    destinationPublicKey: 'DESTINATION_KEY',
-    amount: 50,
-    memo: 'Web payment'
-  });
-  
-  alert(result.success ? 'Success!' : result.error);
-}
-</script>
-```
-
-### React
-
-```jsx
-import { useState, useEffect } from 'react';
-import SofizPaySDK from 'sofizpay-sdk-js';
-
-function WalletComponent() {
-  const [sdk] = useState(() => new SofizPaySDK());
-  const [balance, setBalance] = useState(0);
-
-  useEffect(() => {
-    const loadBalance = async () => {
-      const result = await sdk.getBalance('YOUR_PUBLIC_KEY');
-      if (result.success) setBalance(result.balance);
-    };
-    loadBalance();
-  }, []);
-
-  const sendPayment = async () => {
-    const result = await sdk.submit({
-      secretkey: 'YOUR_SECRET_KEY',
-      destinationPublicKey: 'RECIPIENT_KEY',
-      amount: 25,
-      memo: 'React payment'
-    });
-    
-    if (result.success) {
-      alert('Payment sent successfully!');
-      // Reload balance
-    }
-  };
-
-  return (
-    <div>
-      <h2>Balance: {balance}</h2>
-      <button onClick={sendPayment}>Send Payment</button>
-    </div>
-  );
-}
-```
-
-### Node.js
-
-```javascript
-import SofizPaySDK from 'sofizpay-sdk-js';
-
-const sdk = new SofizPaySDK();
-
-async function main() {
-  // Check balance
-  const balance = await sdk.getBalance('YOUR_PUBLIC_KEY');
-  console.log(`Current balance: ${balance.balance}`);
-
-  // Send payment
-  const payment = await sdk.submit({
-    secretkey: 'YOUR_SECRET_KEY',
-    destinationPublicKey: 'RECIPIENT_KEY',
-    amount: 100,
-    memo: 'Server payment'
-  });
-
-  console.log(payment.success ? 'Payment sent!' : payment.error);
-}
-
-main();
-```
-
-## API Reference
-
-### Core Methods
-
-| Method | Description | Example |
-|--------|-------------|---------|
-| `submit(data)` | Send secure payment | `sdk.submit({secretkey, destinationPublicKey, amount, memo})` |
-| `getBalance(publicKey)` | Get account balance | `sdk.getBalance('GXXX...')` |
-| `getTransactions(publicKey, limit)` | Get transaction history | `sdk.getTransactions('GXXX...', 50)` |
-| `getTransactionByHash(hash)` | Find transaction by hash | `sdk.getTransactionByHash('abc123...')` |
-| `searchTransactionsByMemo(publicKey, memo, limit)` | Search by memo | `sdk.searchTransactionsByMemo('GXXX...', 'payment', 50)` |
-| `getPublicKey(secretKey)` | Get public key from secret key | `sdk.getPublicKey('SXXX...')` |
-| `startTransactionStream(publicKey, callback, fromNow, checkInterval)` | Start real-time monitoring | `sdk.startTransactionStream('GXXX...', callback, true, 30)` |
-| `stopTransactionStream(publicKey)` | Stop real-time monitoring | `sdk.stopTransactionStream('GXXX...')` |
-| `getStreamStatus(publicKey)` | Check stream status | `sdk.getStreamStatus('GXXX...')` |
-| `makeCIBTransaction(transactionData)` | Create bank transaction | `sdk.makeCIBTransaction({account, amount, full_name, phone, email})` |
-| `verifySignature(verificationData)` | Verify digital signature | `sdk.verifySignature({message, signature_url_safe})` |
-
-### Bank Transaction Parameters
-
-```javascript
-const transactionData = {
-  account: 'string',          // User account identifier
-  amount: 'number',           // Transaction amount (must be > 0)
-  full_name: 'string',        // Customer full name
-  phone: 'string',            // Customer phone number
-  email: 'string',            // Customer email address
-  
-  // Optional parameters
-  memo: 'string',             // Transaction description/memo
-  return_url: 'string',       // URL to redirect after payment
-  redirect: 'boolean'         // Whether to redirect automatically
-};
-```
-
-### Signature Verification Parameters
-
-```javascript
-const verificationData = {
-  message: 'string',              // Original message to verify
-  signature_url_safe: 'string'   // Base64URL-encoded signature
-};
-```
-
-### Advanced Features
-
-```javascript
-// Get public key from secret key
-const result = await sdk.getPublicKey('YOUR_SECRET_KEY');
-if (result.success) {
-  console.log('Public key:', result.publicKey);
-}
-
-// Real-time transaction monitoring - New transactions only
-await sdk.startTransactionStream('YOUR_PUBLIC_KEY', (newTx) => {
-  console.log('New transaction received:', newTx);
-}, true, 30); // fromNow=true, checkInterval=30 seconds
-
-// Real-time monitoring with full history first
-await sdk.startTransactionStream('YOUR_PUBLIC_KEY', (transaction) => {
-  if (transaction.isHistorical) {
-    console.log('Historical transaction:', transaction);
-  } else {
-    console.log('New transaction received:', transaction);
-  }
-}, false, 15); // fromNow=false, checkInterval=15 seconds
-
-// Stop monitoring
-await sdk.stopTransactionStream('YOUR_PUBLIC_KEY');
-
-// Check stream status
-const status = await sdk.getStreamStatus('YOUR_PUBLIC_KEY');
-console.log('Stream active:', status.isActive);
-
-// Search transactions by memo with custom limit
-const searchResults = await sdk.searchTransactionsByMemo('YOUR_PUBLIC_KEY', 'payment', 100);
-if (searchResults.success) {
-  console.log('Found transactions:', searchResults.transactions);
-}
-
-// Get specific transaction by hash
-const transaction = await sdk.getTransactionByHash('TRANSACTION_HASH_HERE');
-if (transaction.success) {
-  console.log('Transaction details:', transaction.transaction);
-}
-```
-
-### Utility Functions
-
-```javascript
-// Convert secret key to public key
-const keyResult = await sdk.getPublicKey('SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
-if (keyResult.success) {
-  console.log('Derived public key:', keyResult.publicKey);
-  // Use this public key for balance checking, transaction queries, etc.
-  const balance = await sdk.getBalance(keyResult.publicKey);
-}
-
-// Get complete transaction history with custom limit
-const allTransactions = await sdk.getTransactions('YOUR_PUBLIC_KEY', 200);
-if (allTransactions.success) {
-  console.log(`Found ${allTransactions.transactions.length} transactions`);
-  allTransactions.transactions.forEach(tx => {
-    console.log(`${tx.type}: ${tx.amount} - ${tx.memo} (${tx.timestamp})`);
-  });
-}
-
-// Search for specific payments by memo
-const orderPayments = await sdk.searchTransactionsByMemo('YOUR_PUBLIC_KEY', 'Order #12345', 10);
-if (orderPayments.success && orderPayments.transactions.length > 0) {
-  console.log('Found order payments:', orderPayments.transactions);
-} else {
-  console.log('No payments found for this order');
-}
-```
-
-### Bank Integration
-
-```javascript
-// Create bank transaction
-const bankResult = await sdk.makeCIBTransaction({
-  account: 'YOUR_PUBLIC_KEY',
-  amount: 150,
-  full_name: 'YOUR_NAME',
-  phone: '+213*********',
-  email: 'YOUR_EMAIL',
-  memo: 'Payment',
-  return_url: 'https://yoursite.com/payment-success',
-  redirect: 'yes' // or 'no'
-});
-
-if (bankResult.success) {
-  console.log('Bank transaction created:', bankResult.url);
-  // Redirect user to payment page or handle response
-} else {
-  console.error('Bank transaction failed:', bankResult.error);
-}
-```
-
-### Real-time Streaming Options
-
-The `startTransactionStream` method accepts these parameters:
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `publicKey` | `string` | - | **Required**. Account public key to monitor |
-| `callback` | `function` | - | **Required**. Function called for each transaction |
-| `fromNow` | `boolean` | `true` | `true`: Only new transactions, `false`: Load history then monitor |
-| `checkInterval` | `number` | `30` | Reconnection interval in seconds (5-300) |
-
-```javascript
-// Example: Load last 200 transactions then monitor new ones
-await sdk.startTransactionStream(
-  'GXXX...', 
-  (tx) => console.log(tx), 
-  false,  // Load historical transactions first
-  10      // Check every 10 seconds
-);
-
-// Example: Monitor only new transactions with custom interval
-await sdk.startTransactionStream(
-  'GXXX...', 
-  (tx) => console.log('Live transaction:', tx), 
-  true,   // From now only
-  60      // Check every minute
-);
-```
-
-### Digital Signature Verification
-
-```javascript
-// Verify digital signature (for webhook validation)
-const isValid = sdk.verifySignature({
-  message: 'wc_order_LI3SLQ7xA7IY9cib84907success23400',
-  signature_url_safe: 'jHrONYl2NuBhjAYTgRq3xwRuW2ZYZIQlx1VWgiObu5FrSnY78pQ...'
-});
-
-if (isValid) {
-  console.log('Signature is valid - proceed with order');
-} else {
-  console.log('Invalid signature - reject request');
-}
-
-// Common use case: Webhook validation
-app.post('/webhook', (req, res) => {
-  const { message, signature } = req.body;
-  
-  if (sdk.verifySignature({ message, signature_url_safe: signature })) {
-    // Process the webhook
-    res.status(200).send('OK');
-  } else {
-    res.status(400).send('Invalid signature');
-  }
-});
-```
-
-## Response Format
-
-All methods return a consistent response format:
-
-```javascript
-// Success
-{
-  success: true,
-  // ... method-specific data
-  timestamp: "2025-07-28T10:30:00.000Z"
-}
-
-// Error
-{
-  success: false,
-  error: "Error description",
-  timestamp: "2025-07-28T10:30:00.000Z"
-}
-```
-
-## Configuration
-
-The SDK is pre-configured for secure digital transactions:
-
-- **Network**: Mainnet
-- **Security**: Enterprise-grade encryption
-- **Performance**: Optimized for high-throughput operations
-
-## Security Best Practices
-
-⚠️ **Important Security Notes:**
-
-- Never expose secret keys in client-side code
-- Use environment variables for sensitive data
-- Always test on test environment first
-- Validate all inputs before sending transactions
-
-```javascript
-// ✅ Good - Environment variable
-const secretKey = process.env.SECRET_KEY;
-
-// ❌ Bad - Hardcoded in code
-const secretKey = 'SXXXXXXXXXXXXX...';
-```
-
-## Transaction Flow
-
-```mermaid
-graph TD
-    A[Initialize SDK] --> B[Authenticate]
-    B --> C{Transaction Type}
-    C -->|Payment| D[Submit Payment]
-    C -->|Query| E[Get Balance/History]
-    C -->|Stream| F[Monitor Real-time]
-    D --> G[Payment Processing]
-    E --> H[Return Data]
-    F --> I[Live Updates]
-    G --> J[Success/Error Response]
-```
-
-## Examples Repository
-
-Find complete examples at: [github.com/kenandarabeh/sofizpay-sdk/examples](https://github.com/kenandarabeh/sofizpay-sdk/tree/main/examples)
-
-## Support
-
-- 📚 **Documentation**: [Full API Docs](https://github.com/kenandarabeh/sofizpay-sdk#readme)
-- 🐛 **Issues**: [Report Bug](https://github.com/kenandarabeh/sofizpay-sdk/issues)
-- 💬 **Discussions**: [Community Help](https://github.com/kenandarabeh/sofizpay-sdk/discussions)
-- 🌐 **Website**: [SofizPay.com](https://sofizpay.com)
-
-## Use Cases
-
-### E-commerce Integration
-Perfect for online stores needing secure payment processing:
-```javascript
-// Process customer payment
-const orderPayment = await sdk.submit({
-  secretkey: process.env.STORE_SECRET_KEY,
-  destinationPublicKey: customerKey,
-  amount: orderTotal,
-  memo: `Order #${orderId}`
-});
-```
-
-### Financial Applications
-Built for fintech apps requiring real-time transaction monitoring:
-```javascript
-// Monitor account activity
-await sdk.startTransactionStream(userKey, (transaction) => {
-  updateUI(transaction);
-  notifyUser(transaction);
-});
-```
-
-### Enterprise Solutions
-Scalable for high-volume business operations:
-```javascript
-// Batch processing
-const results = await Promise.all(
-  payments.map(payment => sdk.submit(payment))
-);
-```
-
-## Performance
-
-- **Speed**: Sub-second transaction processing
-- **Reliability**: 99.9% uptime guarantee
-- **Scalability**: Handles thousands of transactions per second
-- **Global**: Worldwide transaction support
-
-## License
-
-MIT © [SofizPay Team](https://github.com/kenandarabeh)
+---
+
+## ✨ Features
+
+- 💳 **CIB & EDAHABIA Gateway** - Accept bank card and postal card payments with full 3D Secure & Webhook callbacks.
+- 🔍 **CIB Transaction Status Check** - Real-time verification of CIB/EDAHABIA payment status.
+- ⚡ **Send Secure Payments** - Instant DZT wallet digital transactions.
+- 💰 **Account Balance** - Real-time balance checking.
+- 📜 **Transaction History & Search** - Complete transaction history and memo/hash searching.
+- 📡 **Real-time Streaming** - Live transaction monitoring with customizable intervals.
+- 🛍️ **Products Catalog** - Browse available products, gaming vouchers, and telecom packages.
+- 🧾 **Utility Bill Payments** - Pay Sonelgaz, ADE (water), and Algérie Télécom bills programmatically.
+- 📱 **Mobile & Internet Top-ups** - Flexy (Mobilis, Djezzy, Ooredoo) and IDOOM (ADSL / 4G LTE).
+- 🎮 **Gaming Credits** - Instant top-ups for PUBG UC, Free Fire Diamonds, and more.
+- 🔐 **Digital Signature Verification** - Verify cryptographic signatures from SofizPay callbacks.
+- 🌐 **Multi-platform** - Works in Node.js, Browsers, React, Vue, React Native, and Next.js.
 
 ---
 
-**Built with ❤️ for Sofizpay | Version `1.1.11`**
+## 📖 API Reference & Examples
+
+### 1. CIB & EDAHABIA Transactions (`makeCIBTransaction`)
+
+Generate a secure payment URL to accept CIB or EDAHABIA payments with 3D Secure support, webhook callbacks, and sandbox testing.
+
+```javascript
+const response = await sdk.makeCIBTransaction({
+  account: 'GDNS27ISCGOIJFXC6CM4O5SVHVJPSWR42QEBWUFF24N5VVHGW73ZSJNQ', // Your Sofizpay receiving account
+  amount: 1500,                                                       // Amount in DZD
+  full_name: 'Ahmed Ben Ali',                                          // Customer name
+  phone: '+213555123456',                                             // Customer phone
+  email: 'ahmed.benali@example.com',                                  // Customer email
+  return_url: 'https://mystore.com/payment-callback',                 // Redirect URL after checkout
+  webhook_url: 'https://mystore.com/api/cib-webhook',                // Real-time async webhook URL
+  invoice_id: 'INV-2026-001',                                         // Optional invoice ID
+  language: 'ar',                                                     // 'ar' | 'en' | 'fr'
+  memo: 'Order #12345',                                               // Payment note (max 28 bytes)
+  redirect: 'yes',                                                    // 'yes' | 'no'
+  keep_return_url: 'True',                                            // Include signed callback params
+  is_sandbox: false                                                   // Set true for Sandbox testing
+});
+
+if (response.success) {
+  console.log('Payment URL:', response.payment_url);
+  console.log('Transaction ID:', response.transaction_id);
+  // Redirect customer to response.payment_url
+} else {
+  console.error('Failed to initiate payment:', response.error);
+}
+```
+
+---
+
+### 2. Check CIB Transaction Status (`checkCIBTransaction`)
+
+Verify the payment status of an order after user completes payment on the SATIM page.
+
+```javascript
+// Query by order number
+const check = await sdk.checkCIBTransaction({
+  order_number: '2517039448',
+  is_sandbox: false // Set true if testing in sandbox
+});
+
+if (check.success && check.status === 'paid') {
+  console.log(`Order ${check.order_number} was successfully paid! Amount: ${check.amount} DZD`);
+} else {
+  console.log('Payment status:', check.status, check.errorMessage);
+}
+```
+
+---
+
+### 3. Products Catalog (`getProducts`)
+
+Retrieve available products and services with their prices in DZT, with optional search filtering.
+
+```javascript
+// Get all available products
+const catalog = await sdk.getProducts({
+  encrypted_sk: 'YOUR_ENCRYPTED_SECRET_KEY_OR_PLAIN_KEY'
+});
+
+console.log(`Available products count: ${catalog.count}`);
+catalog.products.forEach(product => {
+  console.log(`${product.name}: ${product.price} DZT`);
+});
+
+// Search for specific products (e.g., PUBG, Free Fire, Mobilis)
+const searchResult = await sdk.getProducts({
+  encrypted_sk: 'YOUR_SECRET_KEY',
+  search: 'PUBG'
+});
+console.log('Found products:', searchResult.products);
+```
+
+---
+
+### 4. Utility Bill Payments (`payBill`)
+
+Pay Algerian utility bills directly via the SDK:
+
+#### ADE (Algérienne Des Eaux - Water Bill)
+```javascript
+const adePayment = await sdk.payAdeBill({
+  encrypted_sk: 'YOUR_SECRET_KEY',
+  amount: 2500,
+  bill: '0123456789' // Bill reference number
+});
+
+if (adePayment.success) {
+  console.log('ADE Bill Paid! Operation ID:', adePayment.operation_id);
+}
+```
+
+#### Sonelgaz (Electricity & Gas)
+```javascript
+const sonelgazPayment = await sdk.paySonelgazBill({
+  encrypted_sk: 'YOUR_SECRET_KEY',
+  amount: 3500,
+  customerId: 'CUST-100234', // Customer ID
+  ebb: 'EBB-987654',         // EBB Number
+  bill: 'BILL-456789'        // Bill Number
+});
+
+if (sonelgazPayment.success) {
+  console.log('Sonelgaz Bill Paid! Operation ID:', sonelgazPayment.operation_id);
+}
+```
+
+#### Algérie Télécom Bill
+```javascript
+const telecomPayment = await sdk.payAlgerieTelecomBill({
+  encrypted_sk: 'YOUR_SECRET_KEY',
+  amount: 2000,
+  phone: '021234567', // Landline or subscription number
+  bill: 'BILL-00129'
+});
+```
+
+---
+
+### 5. Mobile, Internet & Game Top-ups
+
+#### Phone Recharge (Flexy: Mobilis, Djezzy, Ooredoo)
+```javascript
+const flexy = await sdk.rechargePhone({
+  encrypted_sk: 'YOUR_SECRET_KEY',
+  phone: '0661234567',
+  operator: 'djezzy', // 'mobilis' | 'djezzy' | 'ooredoo'
+  amount: 500,
+  offer: 'prepaid'
+});
+```
+
+#### IDOOM Internet Recharge (ADSL & 4G LTE)
+```javascript
+const internet = await sdk.rechargeInternet({
+  encrypted_sk: 'YOUR_SECRET_KEY',
+  phone: '0458230823',          // 10 digits for 4G, 9 digits for ADSL
+  operator: 'idoom',
+  amount: 1000,
+  offer: 'IDOOM 4G 1000'        // e.g. 'IDOOM 4G 1000' or 'IDOOM ADSL 2000'
+});
+```
+
+#### Gaming Credits (PUBG & Free Fire)
+```javascript
+const game = await sdk.rechargeGame({
+  encrypted_sk: 'YOUR_SECRET_KEY',
+  operator: 'pubg',             // 'pubg' | 'freefire'
+  playerId: '5123456789',       // Player in-game ID
+  amount: 1200,
+  offer: '60'                   // '60' | '325' | '660' for PUBG, '110' | '210' for Free Fire
+});
+```
+
+---
+
+### 6. Operation Details Inquiry (`getOperationDetails`)
+
+```javascript
+const details = await sdk.getOperationDetails({
+  operation_id: '550e8400-e29b-41d4-a716-446655440000',
+  encrypted_sk: 'YOUR_SECRET_KEY'
+});
+
+if (details.success) {
+  console.log('Operation Details:', details.data);
+}
+```
+
+---
+
+### 7. Digital Signature Verification (`verifySignature`)
+
+Verify webhook callbacks signed with RSA SHA-256:
+
+```javascript
+// Webhook endpoint in Express
+app.post('/api/cib-webhook', (req, res) => {
+  const { message, signature_url_safe } = req.body;
+  
+  const isValid = sdk.verifySignature({
+    message: message,
+    signature_url_safe: signature_url_safe
+  });
+  
+  if (isValid) {
+    // Webhook authentic — fulfill order
+    res.status(200).json({ received: true });
+  } else {
+    res.status(400).json({ error: 'Invalid signature' });
+  }
+});
+```
+
+---
+
+### 8. Direct Stellar Wallet Payments & Balance
+
+```javascript
+// Get balance
+const balance = await sdk.getBalance('GDNS27ISCGOIJFXC6CM4O5SVHVJPSWR42QEBWUFF24N5VVHGW73ZSJNQ');
+console.log('Balance:', balance.balance, balance.asset_code);
+
+// Real-time transaction streaming
+const stream = await sdk.startTransactionStream(
+  'GDNS27ISCGOIJFXC6CM4O5SVHVJPSWR42QEBWUFF24N5VVHGW73ZSJNQ',
+  (newTx) => {
+    console.log('Live Payment Received:', newTx.amount, newTx.memo, newTx.from);
+  },
+  true, // fromNow
+  'now',
+  30    // check interval in seconds
+);
+
+// Stop streaming
+await sdk.stopTransactionStream('GDNS27ISCGOIJFXC6CM4O5SVHVJPSWR42QEBWUFF24N5VVHGW73ZSJNQ');
+```
+
+---
+
+## 🧪 Testing with CIB Sandbox
+
+SofizPay provides a mock testing environment to test CIB / EDAHABIA payments without real cards:
+
+Set `is_sandbox: true` in `makeCIBTransaction` or `checkCIBTransaction`.
+
+### Test Card Numbers:
+
+| Card Number | Expiry | CVV | Expected Result |
+|-------------|--------|-----|-----------------|
+| `6280581001234567` | `12/28` | `123` | **Approved** |
+| `6280581009876543` | `12/29` | `456` | **Approved** |
+| `6280581005555555` | `06/28` | `999` | **Declined by issuer** |
+| `6280581004444444` | `09/28` | `444` | **Insufficient funds** |
+| `6280581003333333` | `03/21` | `333` | **Expired card** |
+| `6280581002222222` | `11/28` | `222` | **Timeout** |
+
+> **Sandbox OTP:** Use `123456` for any test transaction.
+
+---
+
+## 🔒 Security Best Practices
+
+1. **Protect Secret Keys:** Never hardcode secret keys in frontend or public code. Always use environment variables (`process.env.SOFIZPAY_SECRET_KEY`).
+2. **Verify Webhooks:** Always use `sdk.verifySignature()` to validate incoming webhook payloads before updating database records.
+3. **Check Status Server-side:** When a customer returns to your `return_url`, verify the transaction using `checkCIBTransaction()` from your server before granting access or fulfilling orders.
+
+---
+
+## 📜 License
+
+MIT © [SofizPay Team](https://github.com/kenandarabeh)
+
+**Built with ❤️ for Algerian Fintech | [docs.sofizpay.com](https://docs.sofizpay.com/)**
